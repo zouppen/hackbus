@@ -1,0 +1,8 @@
+# Scons temps
+/config.log
+/*.pyc
+/.sconsign.dblite
+
+# Compiled
+/modclient
+*.o
