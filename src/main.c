@@ -13,7 +13,6 @@ bool relay_control(modbus_t *mb, int slave, int relay, bool state)
 {
 	int value = state ? 0x0100 : 0x0200;
 	if (modbus_set_slave(mb, slave) == -1) return false;
-	if (modbus_connect(mb) == -1) return false;
 	if (modbus_write_register(mb, relay, value) == -1) return false;
 	return true;
 }
@@ -23,7 +22,6 @@ int main(int argc, char **argv)
 {
 	modbus_t *mb;
 	int ret = 0;
-	//uint16_t tab_reg[32];
 
 	mb = modbus_new_rtu(argv[1], 9600, 'N', 8, 1);
 	if (mb == NULL) {
@@ -32,6 +30,12 @@ int main(int argc, char **argv)
 		goto end;
 	}
 
+	if (modbus_connect(mb) == -1) {
+		fprintf(stderr, "Unable to connect to bus\n");
+		ret = -1;
+		goto free;
+	}
+	
 	bool state = false;
 	while (true) {
 		state = !state;
