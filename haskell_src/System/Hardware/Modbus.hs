@@ -70,6 +70,4 @@ writeBit h addr status = do
   when (out /= 1) $ failModbus
 
 close :: ModbusHandle -> IO ()
-close h = do
-  withForeignPtr h modbus_close
-  finalizeForeignPtr h
+close h = withForeignPtr h modbus_close
