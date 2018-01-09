@@ -1,0 +1,22 @@
+name:          hackbus
+version:       0.0.1
+synopsis:      Modbus library
+description:   Libmodbus bindings for Haskell.
+category:      Hardware
+license:       LGPL-3
+--license-file:  LICENSE
+author:        Joel Lehtonen
+maintainer:    joel.lehtonen@iki.fi
+build-type:    Simple
+cabal-version: >= 1.2
+source-repository head
+  type: git
+  location: git://github.com/zouppen/hackbus
+
+library
+  hs-source-dirs:  haskell_src
+  exposed-modules: System.Hardware.Modbus
+  cc-options:      -std=gnu99
+  pkgconfig-depends: libmodbus
+  build-depends:
+    base >= 4 && < 5
