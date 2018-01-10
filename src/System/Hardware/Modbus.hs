@@ -1,5 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls #-}
-module System.Hardware.Modbus ( Parity(..)
+module System.Hardware.Modbus ( ModbusHandle
+                              , Parity(..)
                               , newRTU
                               , connect
                               , setSlave

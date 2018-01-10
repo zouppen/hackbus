@@ -14,7 +14,7 @@ source-repository head
   location: git://github.com/zouppen/hackbus
 
 library
-  hs-source-dirs:  haskell_src
+  hs-source-dirs:  src
   exposed-modules: System.Hardware.Modbus
   cc-options:      -std=gnu99
   pkgconfig-depends: libmodbus
