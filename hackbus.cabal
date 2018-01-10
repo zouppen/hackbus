@@ -15,8 +15,10 @@ source-repository head
 
 library
   hs-source-dirs:  src
-  exposed-modules: System.Hardware.Modbus
+  exposed-modules: System.Hardware.Modbus, System.Hardware.Modbus.BusMaster
   cc-options:      -std=gnu99
   pkgconfig-depends: libmodbus
   build-depends:
-    base >= 4 && < 5
+                base >= 4 && < 5,
+                stm >= 2 && < 3,
+                containers >= 0.5.7.1 && < 1
