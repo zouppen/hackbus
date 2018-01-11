@@ -1,44 +1,44 @@
+{-# LANGUAGE RecordWildCards #-}
 module System.Hardware.Modbus.BusMaster where
 
-import qualified System.Hardware.Modbus as B
+import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (when)
 import qualified Data.Map.Strict as M
+import qualified System.Hardware.Modbus as B
 
-type Callback x = x -> STM()
-type OperationMap = M.Map Operation Response
+type CommandMap = M.Map Command Response
 
-{-
-instance (Show a) => Show (Callback a) where
-  show _ = "<callback>"
+data Master = Master { opMapVar :: TVar CommandMap
+                     , thread   :: ThreadId
+                     }
 
-instance (Eq a) => Eq (Callback a) where
-  _ == _ = True
-
-instance (Ord a) => Ord (Callback a) where
-  compare _ _ = EQ
--}
-
-data Operation = Operation { slave   :: Int
-                           , command :: Command
-                           } deriving (Show, Eq, Ord)
-
-data Command = ReadInputBits { addr        :: Int
+data Command = ReadInputBits { slave       :: Int
+                             , addr        :: Int
                              , nb          :: Int
                              }
-             | WriteBit      { addr        :: Int
+             | WriteBit      { slave       :: Int
+                             , addr        :: Int
                              , status      :: Bool
                              } deriving (Show, Eq, Ord)
 
-data Response = ReadInputBitsResponse (Callback [Bool])
-              | ActionResponse (Callback ())
+data Response = ReadInputBitsResponse (TMVar [Bool])
+              | ActionResponse (TMVar ())
 
--- |Insert query to the queue
-enqueue :: TVar OperationMap -> Operation -> Response -> STM ()
-enqueue mv command response = modifyTVar' mv $ M.insertWith mergeResponse command response
+-- |Insert query to the queue. If there is such element, don't create
+-- a new object but reuse the same variable.
+enqueue :: TVar CommandMap -> Command -> STM Response -> STM Response
+enqueue mv command newResponse = do
+  m <- readTVar mv
+  case M.lookup command m of
+    Just response -> return response
+    Nothing       -> do
+      response <- newResponse
+      writeTVar mv $ M.insert command response m
+      return response
 
 -- |Take next element from the map. Retry when empty.
-takeNext :: TVar OperationMap -> Operation -> STM (Operation, Response)
+takeNext :: TVar CommandMap -> Command -> STM (Command, Response)
 takeNext mv prev = do
   m <- readTVar mv
   when (M.null m) retry
@@ -48,24 +48,17 @@ takeNext mv prev = do
   writeTVar mv $ M.delete k m
   return next
 
-combine :: Callback t -> Callback t -> Callback t
-combine cb1 cb2 x = cb1 x >> cb2 x
-
-mergeResponse (ReadInputBitsResponse a) (ReadInputBitsResponse b) = ReadInputBitsResponse $ combine a b
-mergeResponse (ActionResponse a) (ActionResponse b) = ActionResponse $ combine a b
-mergeResponse _ _ = error "Incompatible types in mergeResponse. Shouldn't happen!"
+wrap :: Master -> Command -> (TMVar a -> Response) -> STM Response
+wrap Master{..} operation response = enqueue opMapVar operation (response <$> newEmptyTMVar)
 
 -- Public parts
 runMaster context = do
   set <- newTVarIO
   return ()
 
--- TODO Muuta niin että käyttää samaa STM-actionia jos sellainen on jo jonossa ja readTMVar
+readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
+readInputBits master slave addr nb = (\(ReadInputBitsResponse x) -> readTMVar x) <$> wrap master ReadInputBits{..} ReadInputBitsResponse
 
-wrap master operation response = do
-  resp <- newEmptyTMVar
-  enqueue master operation (response $ putTMVar resp)
-  return $ takeTMVar resp
-
-readInputBits master slave addr nb = wrap master (Operation slave $ ReadInputBits addr nb) ReadInputBitsResponse
+writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
+writeBit master slave addr status = (\(ActionResponse x) -> readTMVar x) <$> wrap master WriteBit{..} ReadInputBitsResponse
 
