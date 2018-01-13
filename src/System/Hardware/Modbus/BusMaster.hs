@@ -84,3 +84,9 @@ readInputBits master slave addr nb = enqueue master readInputBitsCb $ Operation 
 
 writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
 writeBit master slave addr status = enqueue master actionCb $ Operation slave . WriteBit addr status
+
+-- |Run action synchronously.
+sync :: STM (STM a) -> IO a
+sync act = do
+  callback <- atomically act
+  atomically callback
