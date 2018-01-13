@@ -4,52 +4,71 @@ module System.Hardware.Modbus.BusMaster where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (when)
-import qualified Data.Map.Strict as M
+import qualified Data.Set as S
 import qualified System.Hardware.Modbus as B
 
-type CommandMap = M.Map Command Response
+type CommandSet = S.Set Command
 
-data Master = Master { opMapVar :: TVar CommandMap
+data Master = Master { cmdVar   :: TVar CommandSet
                      , thread   :: ThreadId
                      }
 
 data Command = ReadInputBits { slave       :: Int
                              , addr        :: Int
                              , nb          :: Int
+                             , readInputBitsCb :: Callback [Bool]
                              }
              | WriteBit      { slave       :: Int
                              , addr        :: Int
                              , status      :: Bool
+                             , actionCb    :: Callback ()
                              } deriving (Show, Eq, Ord)
 
-data Response = ReadInputBitsResponse (TMVar [Bool])
-              | ActionResponse (TMVar ())
+data Callback x = Callback (TMVar x)
+
+instance (Show a) => Show (Callback a) where
+  show _ = "<callback>"
+
+instance (Eq a) => Eq (Callback a) where
+  _ == _ = True
+
+instance (Ord a) => Ord (Callback a) where
+  compare _ _ = EQ
+
+-- |This workaround returns equal element from the set if there is
+-- any. The point is to return an element compares equal but is not
+-- equal in practice.
+setLookupEQ :: Ord a => a -> S.Set a -> Maybe a
+setLookupEQ a s = case S.lookupGE a s of
+  Just b -> if compare a b == EQ
+            then Just b
+            else Nothing
+  Nothing -> Nothing
 
 -- |Insert query to the queue. If there is such element, don't create
 -- a new object but reuse the same variable.
-enqueue :: TVar CommandMap -> Command -> STM Response -> STM Response
-enqueue mv command newResponse = do
-  m <- readTVar mv
-  case M.lookup command m of
-    Just response -> return response
-    Nothing       -> do
-      response <- newResponse
-      writeTVar mv $ M.insert command response m
-      return response
+enqueue :: Master -> (Command -> Callback a) -> (Callback a -> Command) -> STM (STM a)
+enqueue Master{..} getter commandProto = do
+  s <- readTVar cmdVar
+  newCommand <- (commandProto . Callback) <$> newEmptyTMVar
+  case setLookupEQ newCommand s of
+    Just oldCommand -> return $ readCallback oldCommand
+    Nothing -> do
+      writeTVar cmdVar $ S.insert newCommand s
+      return $ readCallback newCommand
+  where unwrap (Callback a) = a
+        readCallback = readTMVar . unwrap . getter 
 
 -- |Take next element from the map. Retry when empty.
-takeNext :: TVar CommandMap -> Command -> STM (Command, Response)
+takeNext :: TVar CommandSet -> Command -> STM Command
 takeNext mv prev = do
-  m <- readTVar mv
-  when (M.null m) retry
-  let next@(k,_) = case M.lookupGT prev m of
-        Nothing -> M.findMin m  
+  s <- readTVar mv
+  when (S.null s) retry
+  let next = case S.lookupGT prev s of
+        Nothing -> S.findMin s  
         Just x -> x
-  writeTVar mv $ M.delete k m
+  writeTVar mv $ S.delete next s
   return next
-
-wrap :: Master -> Command -> (TMVar a -> Response) -> STM Response
-wrap Master{..} operation response = enqueue opMapVar operation (response <$> newEmptyTMVar)
 
 -- Public parts
 runMaster context = do
@@ -57,8 +76,7 @@ runMaster context = do
   return ()
 
 readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
-readInputBits master slave addr nb = (\(ReadInputBitsResponse x) -> readTMVar x) <$> wrap master ReadInputBits{..} ReadInputBitsResponse
+readInputBits master slave addr nb = enqueue master readInputBitsCb $ ReadInputBits slave addr nb
 
 writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
-writeBit master slave addr status = (\(ActionResponse x) -> readTMVar x) <$> wrap master WriteBit{..} ReadInputBitsResponse
-
+writeBit master slave addr status = enqueue master actionCb $ WriteBit slave addr status
