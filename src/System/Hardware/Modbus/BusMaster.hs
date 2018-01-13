@@ -7,21 +7,23 @@ import Control.Monad (when)
 import qualified Data.Set as S
 import qualified System.Hardware.Modbus as B
 
-type CommandSet = S.Set Command
+type OperationSet = S.Set Operation
 
-data Master = Master { cmdVar   :: TVar CommandSet
+data Master = Master { opVar    :: TVar OperationSet
                      , thread   :: ThreadId
                      }
 
-data Command = ReadInputBits { slave       :: Int
-                             , addr        :: Int
-                             , nb          :: Int
+data Operation = Operation { slave   :: Int
+                           , command :: Command
+                           } deriving (Show, Eq, Ord)
+
+data Command = ReadInputBits { addr            :: Int
+                             , nb              :: Int
                              , readInputBitsCb :: Callback [Bool]
                              }
-             | WriteBit      { slave       :: Int
-                             , addr        :: Int
-                             , status      :: Bool
-                             , actionCb    :: Callback ()
+             | WriteBit      { addr            :: Int
+                             , status          :: Bool
+                             , actionCb        :: Callback ()
                              } deriving (Show, Eq, Ord)
 
 data Callback x = Callback (TMVar x)
@@ -47,20 +49,20 @@ setLookupEQ a s = case S.lookupGE a s of
 
 -- |Insert query to the queue. If there is such element, don't create
 -- a new object but reuse the same variable.
-enqueue :: Master -> (Command -> Callback a) -> (Callback a -> Command) -> STM (STM a)
-enqueue Master{..} getter commandProto = do
-  s <- readTVar cmdVar
-  newCommand <- (commandProto . Callback) <$> newEmptyTMVar
-  case setLookupEQ newCommand s of
-    Just oldCommand -> return $ readCallback oldCommand
+enqueue :: Master -> (Command -> Callback a) -> (Callback a -> Operation) -> STM (STM a)
+enqueue Master{..} getter opProto = do
+  s <- readTVar opVar
+  newOperation <- (opProto . Callback) <$> newEmptyTMVar
+  case setLookupEQ newOperation s of
+    Just oldOperation -> return $ readCallback oldOperation
     Nothing -> do
-      writeTVar cmdVar $ S.insert newCommand s
-      return $ readCallback newCommand
+      writeTVar opVar $ S.insert newOperation s
+      return $ readCallback newOperation
   where unwrap (Callback a) = a
-        readCallback = readTMVar . unwrap . getter 
+        readCallback = readTMVar . unwrap . getter . command
 
 -- |Take next element from the map. Retry when empty.
-takeNext :: TVar CommandSet -> Command -> STM Command
+takeNext :: TVar OperationSet -> Operation -> STM Operation
 takeNext mv prev = do
   s <- readTVar mv
   when (S.null s) retry
@@ -76,7 +78,7 @@ runMaster context = do
   return ()
 
 readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
-readInputBits master slave addr nb = enqueue master readInputBitsCb $ ReadInputBits slave addr nb
+readInputBits master slave addr nb = enqueue master readInputBitsCb $ Operation slave . ReadInputBits addr nb
 
 writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
-writeBit master slave addr status = enqueue master actionCb $ WriteBit slave addr status
+writeBit master slave addr status = enqueue master actionCb $ Operation slave . WriteBit addr status
