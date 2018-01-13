@@ -11,6 +11,7 @@ type OperationSet = S.Set Operation
 
 data Master = Master { opVar    :: TVar OperationSet
                      , thread   :: ThreadId
+                     , prevVar  :: TVar Operation
                      }
 
 data Operation = Operation { slave   :: Int
@@ -62,14 +63,15 @@ enqueue Master{..} getter opProto = do
         readCallback = readTMVar . unwrap . getter . command
 
 -- |Take next element from the map. Retry when empty.
-takeNext :: TVar OperationSet -> Operation -> STM Operation
-takeNext mv prev = do
-  s <- readTVar mv
+takeNext :: Master -> STM Operation
+takeNext Master{..} = do
+  s <- readTVar opVar
   when (S.null s) retry
+  prev <- readTVar prevVar
   let next = case S.lookupGT prev s of
         Nothing -> S.findMin s  
         Just x -> x
-  writeTVar mv $ S.delete next s
+  writeTVar opVar $ S.delete next s
   return next
 
 -- Public parts
