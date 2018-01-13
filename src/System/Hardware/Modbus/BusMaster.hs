@@ -11,7 +11,7 @@ type OperationSet = S.Set Operation
 
 data Master = Master { opVar    :: TVar OperationSet
                      , thread   :: ThreadId
-                     , prevVar  :: TVar Operation
+                     , prevVar  :: TVar (Maybe Operation)
                      }
 
 data Operation = Operation { slave   :: Int
@@ -67,11 +67,12 @@ takeNext :: Master -> STM Operation
 takeNext Master{..} = do
   s <- readTVar opVar
   when (S.null s) retry
-  prev <- readTVar prevVar
-  let next = case S.lookupGT prev s of
-        Nothing -> S.findMin s  
+  mbPrev <- readTVar prevVar
+  let next = case (mbPrev >>= flip S.lookupGT s) of
         Just x -> x
+        Nothing -> S.findMin s
   writeTVar opVar $ S.delete next s
+  writeTVar prevVar $ Just next
   return next
 
 -- Public parts
