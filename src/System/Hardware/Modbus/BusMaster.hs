@@ -105,6 +105,4 @@ writeBit master slave addr status = enqueue master actionCb $ Operation slave . 
 
 -- |Run action synchronously.
 sync :: STM (STM a) -> IO a
-sync act = do
-  callback <- atomically act
-  atomically callback
+sync act = atomically act >>= atomically

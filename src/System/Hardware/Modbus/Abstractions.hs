@@ -19,8 +19,8 @@ onKeeper timer var = do
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
 -- single coil) and needs to be refreshed every given microseconds.
-bitRelayWithTimer :: Master -> Int -> Int -> Int -> IO (TVar Bool)
-bitRelayWithTimer master slave addr timeout = do
+bitRelayWithTimer :: Int -> Master -> Int -> Int -> IO (TVar Bool)
+bitRelayWithTimer timeout master slave addr = do
   var <- newTVarIO False
   let loop state = do
         sync $ writeBit master slave addr state
