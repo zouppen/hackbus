@@ -76,32 +76,31 @@ runMaster handle = do
     threadDelay 5000
   return Master{..}
 
-readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
-readInputBits Master{..} slave addr nb = do
-  var <- newEmptyTMVar
+readInputBits :: Master -> Int -> Int -> Int -> ([Bool] -> STM ()) -> STM ()
+readInputBits Master{..} slave addr nb target = do
   writeTQueue opQueue Operation
     { operation = do
         B.setSlave handle slave
         out <- B.readInputBits handle addr nb
-        atomically $ putTMVar var out
-    , exception = atomically . putTMVar var . throw
+        atomically $ target out
+    , exception = atomically . target . throw
     }
-  return $ takeTMVar var
-
+  return ()
+  -- TODO add target function retry check. Should never block.
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
 -- single coil)
 writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
 writeBit Master{..} slave addr status = do
-  var <- newEmptyTMVar
+  var <- newTVar False
   writeTQueue opQueue Operation
     { operation = do
         B.setSlave handle slave
         B.writeBit handle addr status
-        atomically $ putTMVar var ()
-    , exception = atomically . putTMVar var . throw
+        atomically $ writeTVar var True
+    , exception = atomically . writeTVar var . throw
     }
-  return $ takeTMVar var
+  return $ readTVar var >>= check
 
 -- |Run action synchronously.
 sync :: STM (STM a) -> IO a

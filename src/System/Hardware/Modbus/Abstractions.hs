@@ -32,30 +32,16 @@ relayWithTimer timeout source control = do
   atomically source >>= forkIO . loop
 
 -- |Poll single Modbus source
-poll :: Int -> STM (STM a) -> IO (STM a, ThreadId)
+poll :: Int -> ((a -> STM ()) -> STM ()) -> IO (STM a, ThreadId)
 poll interval get = do
-  var <- sync get >>= newTVarIO
+  -- Initial value setup is a bit challenging
+  var <- newTVarIO Nothing
   tid <- forkIO $ forever $ do
     threadDelay interval
-    act <- atomically get -- Send request
-    atomically $ act >>= writeTVar var -- Collect response
-  return (readTVar var, tid)
-
--- |Poll a Modbus source producing a list and output to separate
--- variables.
-pollMany :: Int -> STM (STM [a]) -> IO ([STM a], ThreadId)
-pollMany interval get = do
-  vars <- sync get >>= mapM newTVarIO
-  tid <- forkIO $ forever $ do
-    threadDelay interval
-    -- Try to divide current state to all variables. In case of an
-    -- exception, propagate it to them.
-    handle
-      -- Fill with exceptions in case of an error
-      (\e -> atomically $ mapM_ (\var -> writeTVar var $ throw (e :: ModbusException)) vars)
-      -- Fill with ouputs in sucessfull case
-      $ do
-        act <- atomically get
-        atomically $ act >>= sequence_ . zipWith writeTVar vars
-  return (map readTVar vars, tid)
-
+    atomically $ get $ writeTVar var . Just
+  return (readJust var, tid)
+  where readJust var = do
+          a <- readTVar var
+          case a of
+            Just a  -> return a
+            Nothing -> retry
