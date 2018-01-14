@@ -3,15 +3,14 @@ module System.Hardware.Modbus.BusMaster where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Monad (when)
+import Control.Monad (forever, when)
 import qualified Data.Set as S
 import qualified System.Hardware.Modbus as B
 
-type OperationSet = S.Set Operation
+type OperationVar = TVar (S.Set Operation)
 
-data Master = Master { opVar    :: TVar OperationSet
+data Master = Master { opVar    :: OperationVar
                      , thread   :: ThreadId
-                     , prevVar  :: TVar (Maybe Operation)
                      }
 
 data Operation = Operation { slave   :: Int
@@ -48,6 +47,10 @@ setLookupEQ a s = case S.lookupGE a s of
             else Nothing
   Nothing -> Nothing
 
+-- |Unwrap callback
+unwrapCb :: Callback t -> TMVar t
+unwrapCb (Callback a) = a
+
 -- |Insert query to the queue. If there is such element, don't create
 -- a new object but reuse the same variable.
 enqueue :: Master -> (Command -> Callback a) -> (Callback a -> Operation) -> STM (STM a)
@@ -59,12 +62,11 @@ enqueue Master{..} getter opProto = do
     Nothing -> do
       writeTVar opVar $ S.insert newOperation s
       return $ readCallback newOperation
-  where unwrap (Callback a) = a
-        readCallback = readTMVar . unwrap . getter . command
+  where readCallback = readTMVar . unwrapCb . getter . command
 
 -- |Take next element from the map. Retry when empty.
-takeNext :: Master -> STM Operation
-takeNext Master{..} = do
+takeNext :: OperationVar -> TVar (Maybe Operation) -> STM Operation
+takeNext opVar prevVar = do
   s <- readTVar opVar
   when (S.null s) retry
   mbPrev <- readTVar prevVar
@@ -75,10 +77,25 @@ takeNext Master{..} = do
   writeTVar prevVar $ Just next
   return next
 
+-- |Internally handle a single Modbus operation
+handleModbus :: B.ModbusHandle -> Operation -> IO ()
+handleModbus h Operation{..} = do
+  B.setSlave h slave
+  case command of
+    ReadInputBits{..} -> B.readInputBits h addr nb >>= call readInputBitsCb
+    WriteBit{..} -> B.writeBit h addr status >>= call actionCb
+  where
+    call callback = atomically . putTMVar (unwrapCb callback)
+
 -- Public parts
+
+runMaster :: B.ModbusHandle -> IO Master
 runMaster context = do
-  set <- newTVarIO
-  return ()
+  opVar <- newTVarIO S.empty
+  prevVar <- newTVarIO Nothing
+  -- TODO implement resend logic and not die
+  thread <- forkIO $ forever $ atomically (takeNext opVar prevVar) >>= handleModbus context
+  return Master{..}
 
 readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
 readInputBits master slave addr nb = enqueue master readInputBitsCb $ Operation slave . ReadInputBits addr nb
