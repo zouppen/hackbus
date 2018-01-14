@@ -151,6 +151,8 @@ runMaster context = do
 readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
 readInputBits master slave addr nb = enqueue master readInputBitsCb $ Operation slave . ReadInputBits addr nb
 
+-- |Relay which is controlled via Modbus function code 0x05 (force
+-- single coil)
 writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
 writeBit master slave addr status = enqueue master actionCb $ Operation slave . WriteBit addr status
 

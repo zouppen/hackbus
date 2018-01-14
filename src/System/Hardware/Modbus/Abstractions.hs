@@ -2,7 +2,7 @@ module System.Hardware.Modbus.Abstractions where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Exception (catch, throw)
+import Control.Exception (handle, throw)
 import Control.Monad (forever)
 import System.Hardware.Modbus
 
@@ -19,29 +19,43 @@ onKeeper timer source = do
 
 -- Public functions follow
 
--- |Relay which is controlled via Modbus function code 0x05 (force
--- single coil) and needs to be refreshed every given microseconds.
-bitRelayWithTimer :: Int -> STM Bool -> Master -> Int -> Int -> IO ThreadId
-bitRelayWithTimer timeout source master slave addr = do
+-- |Wrapper which makes any relay controllable via STM variable and is
+-- refreshed every given microseconds.
+relayWithTimer :: Int -> STM Bool -> (Bool -> STM (STM ())) -> IO ThreadId
+relayWithTimer timeout source control = do
   let loop state = do
-        sync $ writeBit master slave addr state
+        sync $ control state
         f <- if state
              then onKeeper <$> registerDelay timeout
              else return offKeeper
         atomically (f source) >>= loop
   atomically source >>= forkIO . loop
 
-inputBitsVar :: Int -> Master -> Int -> Int -> Int -> IO ([STM Bool], ThreadId)
-inputBitsVar interval master slave addr nb = do
-  var <- action >>= mapM newTVarIO
+-- |Poll single Modbus source
+poll :: Int -> STM (STM a) -> IO (STM a, ThreadId)
+poll interval get = do
+  var <- sync get >>= newTVarIO
+  tid <- forkIO $ forever $ do
+    threadDelay interval
+    act <- atomically get -- Send request
+    atomically $ act >>= writeTVar var -- Collect response
+  return (readTVar var, tid)
+
+-- |Poll a Modbus source producing a list and output to separate
+-- variables.
+pollMany :: Int -> STM (STM [a]) -> IO ([STM a], ThreadId)
+pollMany interval get = do
+  vars <- sync get >>= mapM newTVarIO
   tid <- forkIO $ forever $ do
     threadDelay interval
     -- Try to divide current state to all variables. In case of an
     -- exception, propagate it to them.
-    catch
-      (action >>= atomically . sequence_ . zipWith writeTVar var)
-      (\e -> atomically $ mapM_ (flip writeTVar (throw (e :: ModbusException))) var)
-  return (map readTVar var, tid)
-  where action = sync $ readInputBits master slave addr nb
+    handle
+      -- Fill with exceptions in case of an error
+      (\e -> atomically $ mapM_ (\var -> writeTVar var $ throw (e :: ModbusException)) vars)
+      -- Fill with ouputs in sucessfull case
+      $ do
+        act <- atomically get
+        atomically $ act >>= sequence_ . zipWith writeTVar vars
+  return (map readTVar vars, tid)
 
--- TODO split timer functionality from bitRelayWithTimer to allow to use it with other kind of relays as well
