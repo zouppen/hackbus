@@ -145,6 +145,7 @@ runMaster context = do
   thread <- forkIO $ forever $ do
     task <- atomically (takeNext opVar prevVar)
     handleModbus context stats task
+    threadDelay 5000
   return Master{..}
 
 readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
