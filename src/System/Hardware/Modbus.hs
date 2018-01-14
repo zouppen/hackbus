@@ -96,9 +96,16 @@ handleModbus h Operation{..} = do
     ReadInputBits{..} -> wrap readInputBitsCb $ B.readInputBits h addr nb
     WriteBit{..} -> wrap actionCb $ B.writeBit h addr status
   where
-    wrap callback act = catch (act >>= call callback) (errHandle callback)
+    wrap callback act = catch (retryAction 5 act >>= call callback) (errHandle callback)
     errHandle callback e = call callback $ throw (e :: B.ModbusException)
     call callback = atomically . putTMVar (unwrapCb callback)
+
+retryAction :: Int -> IO a -> IO a
+retryAction 0 action = action
+retryAction n action = c action $ \e -> retryAction (n-1) action
+  where
+    c :: IO a -> (B.ModbusException -> IO a) -> IO a
+    c = catch
 
 -- Public parts
 
