@@ -31,18 +31,17 @@ bitRelayWithTimer timeout source master slave addr = do
         atomically (f source) >>= loop
   atomically source >>= forkIO . loop
 
-inputBitsVar :: Int -> Master -> Int -> Int -> Int -> IO ([STM Bool])
+inputBitsVar :: Int -> Master -> Int -> Int -> Int -> IO ([STM Bool], ThreadId)
 inputBitsVar interval master slave addr nb = do
   var <- action >>= mapM newTVarIO
-  forkIO $ forever $ do
+  tid <- forkIO $ forever $ do
     threadDelay interval
     -- Try to divide current state to all variables. In case of an
     -- exception, propagate it to them.
     catch
       (action >>= atomically . sequence_ . zipWith writeTVar var)
       (\e -> atomically $ mapM_ (flip writeTVar (throw (e :: ModbusException))) var)
-  return $ map readTVar var
+  return (map readTVar var, tid)
   where action = sync $ readInputBits master slave addr nb
 
--- TODO how to kill these?
 -- TODO split timer functionality from bitRelayWithTimer to allow to use it with other kind of relays as well
