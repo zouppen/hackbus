@@ -2,6 +2,7 @@ module System.Hardware.Modbus.Abstractions where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Monad (forever)
 import System.Hardware.Modbus.BusMaster
 
 offKeeper :: TVar Bool -> STM Bool
@@ -30,3 +31,14 @@ bitRelayWithTimer timeout master slave addr = do
         atomically (f var) >>= loop
   forkIO $ loop False
   return var
+
+inputBitsVar :: Int -> Master -> Int -> Int -> Int -> IO (STM [Bool])
+inputBitsVar interval master slave addr nb = do
+  var <- action >>= newTVarIO
+  forkIO $ forever $ do
+    threadDelay interval
+    action >>= atomically . writeTVar var
+  return $ readTVar var
+  where action = sync $ readInputBits master slave addr nb
+
+-- TODO how to kill these?
