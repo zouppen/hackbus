@@ -1,74 +1,117 @@
-{-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls #-}
-module System.Hardware.Modbus ( ModbusHandle
-                              , Parity(..)
-                              , newRTU
-                              , connect
-                              , setSlave
-                              , readInputBits
-                              , writeBit
-                              , close
-                              ) where
+{-# LANGUAGE RecordWildCards #-}
+module System.Hardware.Modbus
+  ( B.Parity(..)
+  , B.newRTU
+  , B.connect
+  , Master
+  , runMaster
+  , sync
+  , readInputBits
+  , writeBit
+  ) where
 
-import Data.Word
-import Foreign.C
-import Foreign.C.Error
-import Foreign.Ptr
-import Foreign.Marshal.Array
-import Foreign.ForeignPtr
-import Control.Monad (when)
+import Control.Concurrent
+import Control.Concurrent.STM
+import Control.Monad (forever, when)
+import qualified Data.Set as S
+import qualified System.Hardware.Modbus.LowLevel as B
 
-data ModbusContext
-type ModbusHandle = ForeignPtr ModbusContext
+type OperationVar = TVar (S.Set Operation)
 
-foreign import ccall "modbus_new_rtu" modbus_new_rtu :: CString -> Int -> Char -> Int -> Int -> IO (Ptr ModbusContext)
-foreign import ccall "modbus_connect" modbus_connect :: Ptr ModbusContext -> IO Int
-foreign import ccall "modbus_set_slave" modbus_set_slave :: Ptr ModbusContext -> Int -> IO Int
-foreign import ccall "modbus_read_input_bits" modbus_read_input_bits :: Ptr ModbusContext -> Int -> Int -> Ptr Word8 -> IO Int
-foreign import ccall "modbus_write_bit" modbus_write_bit :: Ptr ModbusContext -> Int -> Int -> IO Int
-foreign import ccall "modbus_strerror" modbus_strerror :: Errno -> IO CString
-foreign import ccall "modbus_close" modbus_close :: Ptr ModbusContext -> IO ()
-foreign import ccall "&modbus_free" modbus_free :: FunPtr (Ptr ModbusContext -> IO ())
+data Master = Master { opVar    :: OperationVar
+                     , thread   :: ThreadId
+                     }
 
-getModbusError :: IO String
-getModbusError = getErrno >>= modbus_strerror >>= peekCString
+data Operation = Operation { slave   :: Int
+                           , command :: Command
+                           } deriving (Show, Eq, Ord)
 
-failModbus :: IO ()
-failModbus = getModbusError >>= fail
+data Command = ReadInputBits { addr            :: Int
+                             , nb              :: Int
+                             , readInputBitsCb :: Callback [Bool]
+                             }
+             | WriteBit      { addr            :: Int
+                             , status          :: Bool
+                             , actionCb        :: Callback ()
+                             } deriving (Show, Eq, Ord)
+
+data Callback x = Callback (TMVar x)
+
+instance (Show a) => Show (Callback a) where
+  show _ = "<callback>"
+
+instance (Eq a) => Eq (Callback a) where
+  _ == _ = True
+
+instance (Ord a) => Ord (Callback a) where
+  compare _ _ = EQ
+
+-- |This workaround returns equal element from the set if there is
+-- any. The point is to return an element compares equal but is not
+-- equal in practice.
+setLookupEQ :: Ord a => a -> S.Set a -> Maybe a
+setLookupEQ a s = case S.lookupGE a s of
+  Just b -> if compare a b == EQ
+            then Just b
+            else Nothing
+  Nothing -> Nothing
+
+-- |Unwrap callback
+unwrapCb :: Callback t -> TMVar t
+unwrapCb (Callback a) = a
+
+-- |Insert query to the queue. If there is such element, don't create
+-- a new object but reuse the same variable.
+enqueue :: Master -> (Command -> Callback a) -> (Callback a -> Operation) -> STM (STM a)
+enqueue Master{..} getter opProto = do
+  s <- readTVar opVar
+  newOperation <- (opProto . Callback) <$> newEmptyTMVar
+  case setLookupEQ newOperation s of
+    Just oldOperation -> return $ readCallback oldOperation
+    Nothing -> do
+      writeTVar opVar $ S.insert newOperation s
+      return $ readCallback newOperation
+  where readCallback = readTMVar . unwrapCb . getter . command
+
+-- |Take next element from the map. Retry when empty.
+takeNext :: OperationVar -> TVar (Maybe Operation) -> STM Operation
+takeNext opVar prevVar = do
+  s <- readTVar opVar
+  when (S.null s) retry
+  mbPrev <- readTVar prevVar
+  let next = case (mbPrev >>= flip S.lookupGT s) of
+        Just x -> x
+        Nothing -> S.findMin s
+  writeTVar opVar $ S.delete next s
+  writeTVar prevVar $ Just next
+  return next
+
+-- |Internally handle a single Modbus operation
+handleModbus :: B.ModbusHandle -> Operation -> IO ()
+handleModbus h Operation{..} = do
+  B.setSlave h slave
+  case command of
+    ReadInputBits{..} -> B.readInputBits h addr nb >>= call readInputBitsCb
+    WriteBit{..} -> B.writeBit h addr status >>= call actionCb
+  where
+    call callback = atomically . putTMVar (unwrapCb callback)
 
 -- Public parts
 
-data Parity = ParityNone | ParityEven | ParityOdd deriving Show
+runMaster :: B.ModbusHandle -> IO Master
+runMaster context = do
+  opVar <- newTVarIO S.empty
+  prevVar <- newTVarIO Nothing
+  -- TODO implement resend logic and not die
+  thread <- forkIO $ forever $ atomically (takeNext opVar prevVar) >>= handleModbus context
+  return Master{..}
 
-newRTU :: String -> Int -> Parity -> Int -> Int -> IO ModbusHandle
-newRTU device baud parity dataBit stopBit = do
-  let parityC = case parity of
-        ParityNone -> 'N'
-        ParityEven -> 'E'
-        ParityOdd  -> 'O'
-  ptr <- withCString device $ \devC -> modbus_new_rtu devC baud parityC dataBit stopBit
-  when (ptr == nullPtr) $ getModbusError >>= fail
-  newForeignPtr modbus_free ptr
+readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
+readInputBits master slave addr nb = enqueue master readInputBitsCb $ Operation slave . ReadInputBits addr nb
 
-connect :: ModbusHandle -> IO ()
-connect h = do
-  out <- withForeignPtr h modbus_connect
-  when (out /= 0) failModbus
+writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
+writeBit master slave addr status = enqueue master actionCb $ Operation slave . WriteBit addr status
 
-setSlave :: ModbusHandle -> Int -> IO ()
-setSlave h slaveID = do
-  out <- withForeignPtr h $ \p -> modbus_set_slave p slaveID
-  when (out /= 0) failModbus
-
-readInputBits :: ModbusHandle -> Int -> Int -> IO [Bool]
-readInputBits h addr nb = allocaArray nb $ \dest -> do
-  out <- withForeignPtr h $ \p -> modbus_read_input_bits p addr nb dest
-  when (out /= nb) failModbus
-  map (==1) <$> peekArray nb dest
-
-writeBit :: ModbusHandle -> Int -> Bool -> IO ()
-writeBit h addr status = do
-  out <- withForeignPtr h $ \p -> modbus_write_bit p addr (fromEnum status)
-  when (out /= 1) $ failModbus
-
-close :: ModbusHandle -> IO ()
-close h = withForeignPtr h modbus_close
+-- |Run action synchronously.
+sync :: STM (STM a) -> IO a
+sync act = atomically act >>= atomically

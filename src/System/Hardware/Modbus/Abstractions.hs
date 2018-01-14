@@ -3,7 +3,7 @@ module System.Hardware.Modbus.Abstractions where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (forever)
-import System.Hardware.Modbus.BusMaster
+import System.Hardware.Modbus
 
 offKeeper :: TVar Bool -> STM Bool
 offKeeper var = do
