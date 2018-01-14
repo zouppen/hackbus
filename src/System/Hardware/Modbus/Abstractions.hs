@@ -2,6 +2,7 @@ module System.Hardware.Modbus.Abstractions where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception (catch, throw)
 import Control.Monad (forever)
 import System.Hardware.Modbus
 
@@ -32,13 +33,17 @@ bitRelayWithTimer timeout master slave addr = do
   forkIO $ loop False
   return var
 
-inputBitsVar :: Int -> Master -> Int -> Int -> Int -> IO (STM [Bool])
+inputBitsVar :: Int -> Master -> Int -> Int -> Int -> IO ([STM Bool])
 inputBitsVar interval master slave addr nb = do
-  var <- action >>= newTVarIO
+  var <- action >>= mapM newTVarIO
   forkIO $ forever $ do
     threadDelay interval
-    action >>= atomically . writeTVar var
-  return $ readTVar var
+    -- Try to divide current state to all variables. In case of an
+    -- exception, propagate it to them.
+    catch
+      (action >>= atomically . sequence_ . zipWith writeTVar var)
+      (\e -> atomically $ mapM_ (flip writeTVar (throw (e :: ModbusException))) var)
+  return $ map readTVar var
   where action = sync $ readInputBits master slave addr nb
 
 -- TODO how to kill these?
