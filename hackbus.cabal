@@ -22,5 +22,5 @@ library
   pkgconfig-depends: libmodbus
   build-depends:
                 base >= 4 && < 5,
-                stm >= 2 && < 3,
-                containers >= 0.5.7.1 && < 1
+                stm >= 2 && < 3
+
