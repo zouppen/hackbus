@@ -1,10 +1,12 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, TupleSections #-}
 module System.Hardware.Modbus
   ( B.Parity(..)
   , B.ModbusException
   , B.newRTU
   , B.connect
   , Master
+  , Stats
+  , getStats
   , runMaster
   , sync
   , readInputBits
@@ -22,7 +24,13 @@ type OperationVar = TVar (S.Set Operation)
 
 data Master = Master { opVar    :: OperationVar
                      , thread   :: ThreadId
+                     , stats    :: TVar Stats
                      }
+
+data Stats = Stats { writes   :: Int
+                   , retries  :: Int
+                   , fails    :: Int
+                   } deriving (Show, Eq, Ord)
 
 data Operation = Operation { slave   :: Int
                            , command :: Command
@@ -89,23 +97,43 @@ takeNext opVar prevVar = do
   return next
 
 -- |Internally handle a single Modbus operation
-handleModbus :: B.ModbusHandle -> Operation -> IO ()
-handleModbus h Operation{..} = do
+handleModbus :: B.ModbusHandle -> TVar Stats -> Operation -> IO ()
+handleModbus h statsVar Operation{..} = do
   B.setSlave h slave
   case command of
     ReadInputBits{..} -> wrap readInputBitsCb $ B.readInputBits h addr nb
     WriteBit{..} -> wrap actionCb $ B.writeBit h addr status
   where
-    wrap callback act = catch (retryAction 5 act >>= call callback) (errHandle callback)
-    errHandle callback e = call callback $ throw (e :: B.ModbusException)
-    call callback = atomically . putTMVar (unwrapCb callback)
+    wrap callback act = catch (retryAction retryMax act >>= call callback . Right) (errHandle callback)
+    errHandle callback e = call callback $ Left e
+    call callback out = atomically $ do
+      let put = putTMVar (unwrapCb callback)
+      case out of
+        Right (a, left) -> do
+          Stats{..} <- readTVar statsVar
+          writeTVar statsVar $ Stats{ writes  = succ writes
+                                    , retries = retries + retryMax - left
+                                    , fails   = fails
+                                    }
+          put a
+        Left e -> do
+          Stats{..} <- readTVar statsVar
+          writeTVar statsVar $ Stats{ writes  = succ writes
+                                    , retries = retries + retryMax
+                                    , fails   = fails + 1
+                                    }
+          put $ throw (e :: B.ModbusException)
+    retryMax = 5
 
-retryAction :: Int -> IO a -> IO a
-retryAction 0 action = action
-retryAction n action = c action $ \e -> retryAction (n-1) action
+-- |Retry given number of times and return the result and the number
+-- of retries left.
+retryAction :: Int -> IO a -> IO (a, Int)
+retryAction 0 action = (,0) <$> action 
+retryAction n action = c realAction $ \e -> retryAction (n-1) action
   where
     c :: IO a -> (B.ModbusException -> IO a) -> IO a
     c = catch
+    realAction = (,n) <$> action
 
 -- Public parts
 
@@ -113,7 +141,10 @@ runMaster :: B.ModbusHandle -> IO Master
 runMaster context = do
   opVar <- newTVarIO S.empty
   prevVar <- newTVarIO Nothing
-  thread <- forkIO $ forever $ atomically (takeNext opVar prevVar) >>= handleModbus context
+  stats <- newTVarIO $ Stats 0 0 0
+  thread <- forkIO $ forever $ do
+    task <- atomically (takeNext opVar prevVar)
+    handleModbus context stats task
   return Master{..}
 
 readInputBits :: Master -> Int -> Int -> Int -> STM (STM [Bool])
@@ -125,3 +156,7 @@ writeBit master slave addr status = enqueue master actionCb $ Operation slave . 
 -- |Run action synchronously.
 sync :: STM (STM a) -> IO a
 sync act = atomically act >>= atomically
+
+-- |Read statistics
+getStats :: Master -> STM Stats
+getStats Master{..} = readTVar stats
