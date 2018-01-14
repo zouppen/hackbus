@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module System.Hardware.Modbus
   ( B.Parity(..)
+  , B.ModbusException
   , B.newRTU
   , B.connect
   , Master
@@ -12,6 +13,7 @@ module System.Hardware.Modbus
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception (catch, throw)
 import Control.Monad (forever, when)
 import qualified Data.Set as S
 import qualified System.Hardware.Modbus.LowLevel as B
@@ -91,9 +93,11 @@ handleModbus :: B.ModbusHandle -> Operation -> IO ()
 handleModbus h Operation{..} = do
   B.setSlave h slave
   case command of
-    ReadInputBits{..} -> B.readInputBits h addr nb >>= call readInputBitsCb
-    WriteBit{..} -> B.writeBit h addr status >>= call actionCb
+    ReadInputBits{..} -> wrap readInputBitsCb $ B.readInputBits h addr nb
+    WriteBit{..} -> wrap actionCb $ B.writeBit h addr status
   where
+    wrap callback act = catch (act >>= call callback) (errHandle callback)
+    errHandle callback e = call callback $ throw (e :: B.ModbusException)
     call callback = atomically . putTMVar (unwrapCb callback)
 
 -- Public parts
@@ -102,7 +106,6 @@ runMaster :: B.ModbusHandle -> IO Master
 runMaster context = do
   opVar <- newTVarIO S.empty
   prevVar <- newTVarIO Nothing
-  -- TODO implement resend logic and not die
   thread <- forkIO $ forever $ atomically (takeNext opVar prevVar) >>= handleModbus context
   return Master{..}
 

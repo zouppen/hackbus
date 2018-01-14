@@ -1,6 +1,7 @@
-{-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls #-}
+{-# LANGUAGE DeriveDataTypeable, EmptyDataDecls, ForeignFunctionInterface, RecordWildCards #-}
 module System.Hardware.Modbus.LowLevel
   ( ModbusHandle
+  , ModbusException
   , Parity(..)
   , newRTU
   , connect
@@ -10,13 +11,21 @@ module System.Hardware.Modbus.LowLevel
   , close
   ) where
 
+import Control.Exception
+import Control.Monad (when)
+import Data.Typeable
 import Data.Word
+import Data.Int (Int32)
 import Foreign.C
 import Foreign.C.Error
-import Foreign.Ptr
-import Foreign.Marshal.Array
 import Foreign.ForeignPtr
-import Control.Monad (when)
+import Foreign.Marshal.Array
+import Foreign.Ptr
+
+data ModbusException = ModbusException { modbusErrno    :: Int32
+                                       , modbusStrerror :: String
+                                       } deriving (Show, Typeable)
+instance Exception ModbusException
 
 data ModbusContext
 type ModbusHandle = ForeignPtr ModbusContext
@@ -30,11 +39,12 @@ foreign import ccall "modbus_strerror" modbus_strerror :: Errno -> IO CString
 foreign import ccall "modbus_close" modbus_close :: Ptr ModbusContext -> IO ()
 foreign import ccall "&modbus_free" modbus_free :: FunPtr (Ptr ModbusContext -> IO ())
 
-getModbusError :: IO String
-getModbusError = getErrno >>= modbus_strerror >>= peekCString
-
 failModbus :: IO ()
-failModbus = getModbusError >>= fail
+failModbus = do
+  errno <- getErrno
+  let modbusErrno = (\(Errno (CInt i)) -> i) errno
+  modbusStrerror <- modbus_strerror errno >>= peekCString
+  throw ModbusException{..}
 
 -- Public parts
 
@@ -47,7 +57,7 @@ newRTU device baud parity dataBit stopBit = do
         ParityEven -> 'E'
         ParityOdd  -> 'O'
   ptr <- withCString device $ \devC -> modbus_new_rtu devC baud parityC dataBit stopBit
-  when (ptr == nullPtr) $ getModbusError >>= fail
+  when (ptr == nullPtr) $ failModbus
   newForeignPtr modbus_free ptr
 
 connect :: ModbusHandle -> IO ()
