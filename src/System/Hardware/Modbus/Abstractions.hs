@@ -59,17 +59,34 @@ waitUntil state input = do
   now <- input
   unless (now == state) retry
 
--- |Button which toggles its state when it is pressed once.
-pushButton :: Bool -> STM Bool -> IO (STM Bool, ThreadId)
-pushButton initialState source = do
-  state <- newTVarIO initialState
-  tid <- forkIO $ forever $ do
-    atomically $ do
-      waitUntil True source
-      modifyTVar state not
-    atomically $ waitUntil False source
-  return (readTVar state, tid)
+-- |Generic button which runs IO action every time a button is
+-- pressed.
+pushButton :: STM Bool -> IO () -> IO () -> IO ThreadId
+pushButton source actOff actOn = do
+  state <- atomically source
+  forkIO $ handle state
+  where handle True = do
+          atomically $ waitUntil False source
+          actOff
+          handle False
+        handle False = do
+          atomically $ waitUntil True source
+          actOn
+          handle True
+
+-- |Button which toggles a state when it is pressed once.
+toggleButton :: STM Bool -> TVar Bool -> IO ThreadId
+toggleButton source var = pushButton source nop $ atomically $ modifyTVar var not
 
 -- |Helper function for retreiving a single value from a query
 item :: Functor f => f [a] -> Int -> f a
 item list i = (!! i) <$> list
+
+-- |Shorthand for doing nothing
+nop :: IO ()
+nop = return ()
+
+-- |Sleep forever, useful at the end of main function to keep the bus
+-- running.
+sleepForever :: IO ()
+sleepForever = forever $ threadDelay maxBound
