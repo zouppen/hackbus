@@ -1,13 +1,18 @@
-{-# LANGUAGE RecordWildCards #-}
 module Main where
 
 import Control.Concurrent.STM
+import System.Environment (getArgs)
 import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
 
 main = do
+  -- Minimal command line parsing
+  args <- getArgs
+  device <- case args of
+    [a] -> return a
+    _   -> fail "Give serial device name"
   -- Start Modbus master
-  h <- newRTU "/dev/ttyUSB0" 9600 ParityNone 8 1
+  h <- newRTU device 9600 ParityNone 8 1
   connect h
   master <- runMaster h
   -- Get input banks from both rooms
@@ -38,4 +43,5 @@ main = do
   pushButton (inputKerho `item` 2)
     (putStrLn "Kerhoilta loppui")
     (putStrLn "Kerhoilta alkoi")
+  putStrLn "Up and running"
   sleepForever
