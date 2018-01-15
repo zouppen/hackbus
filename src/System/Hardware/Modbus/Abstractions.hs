@@ -3,7 +3,7 @@ module System.Hardware.Modbus.Abstractions where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (handle, throw)
-import Control.Monad (forever)
+import Control.Monad (forever, unless)
 import System.Hardware.Modbus
 
 offKeeper :: STM Bool -> STM Bool
@@ -50,9 +50,25 @@ poll :: Query a -> IO (STM a, ThreadId)
 poll = pollWithInterval 100000
 
 -- |Ordinary relay. Refreshes ON state every 4 seconds.
-
 relayControl :: STM Bool -> Control Bool -> IO ThreadId
 relayControl = relayControlWithHold 4000000
+
+-- |Waits until input is true (e.g. button is pressed)
+waitUntil :: Bool -> STM Bool -> STM ()
+waitUntil state input = do
+  now <- input
+  unless (now == state) retry
+
+-- |Button which toggles its state when it is pressed once.
+pushButton :: Bool -> STM Bool -> IO (STM Bool, ThreadId)
+pushButton initialState source = do
+  state <- newTVarIO initialState
+  tid <- forkIO $ forever $ do
+    atomically $ do
+      waitUntil True source
+      modifyTVar state not
+    atomically $ waitUntil False source
+  return (readTVar state, tid)
 
 -- |Helper function for retreiving a single value from a query
 item :: Functor f => f [a] -> Int -> f a
