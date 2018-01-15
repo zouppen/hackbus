@@ -6,7 +6,8 @@ module System.Hardware.Modbus
   , B.connect
   , Master
   , Stats
-  , Call
+  , Query
+  , Control
   , getStats
   , runMaster
   , sync
@@ -36,7 +37,8 @@ data Operation = Operation { operation :: IO ()
                            }
 
 type Callback a = a -> STM ()
-type Call a = Callback a -> STM ()
+type Query a = Callback a -> STM ()
+type Control a = a -> STM (STM ())
 
 -- |Internally handle a single Modbus operation
 handleModbus :: TVar Stats -> Operation -> IO ()
@@ -80,7 +82,7 @@ runMaster handle = do
     threadDelay 5000
   return Master{..}
 
-readInputBits :: Master -> Int -> Int -> Int -> Call [Bool]
+readInputBits :: Master -> Int -> Int -> Int -> Query [Bool]
 readInputBits Master{..} slave addr nb target = do
   writeTQueue opQueue Operation
     { operation = do
@@ -94,7 +96,7 @@ readInputBits Master{..} slave addr nb target = do
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
 -- single coil)
-writeBit :: Master -> Int -> Int -> Bool -> STM (STM ())
+writeBit :: Master -> Int -> Int -> Control Bool
 writeBit Master{..} slave addr status = do
   var <- newTVar False
   writeTQueue opQueue Operation

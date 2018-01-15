@@ -19,10 +19,10 @@ onKeeper timer source = do
 
 -- Public functions follow
 
--- |Wrapper which makes any relay controllable via STM variable and is
--- refreshed every given microseconds.
-relayWithTimer :: Int -> STM Bool -> (Bool -> STM (STM ())) -> IO ThreadId
-relayWithTimer timeout source control = do
+-- |Wrapper which makes any relay controllable via STM variable. If
+-- the relay is on the state is refreshed every given microseconds.
+relayControlWithHold :: Int -> STM Bool -> Control Bool -> IO ThreadId
+relayControlWithHold timeout source control = do
   let loop state = do
         sync $ control state
         f <- if state
@@ -32,8 +32,8 @@ relayWithTimer timeout source control = do
   atomically source >>= forkIO . loop
 
 -- |Poll single Modbus source periodically
-poll :: Int -> Call a -> IO (STM a, ThreadId)
-poll interval get = do
+pollWithInterval :: Int -> Query a -> IO (STM a, ThreadId)
+pollWithInterval interval get = do
   -- Initial value setup is a bit challenging
   tmp <- newEmptyTMVarIO
   atomically $ get $ putTMVar tmp
@@ -43,3 +43,17 @@ poll interval get = do
     threadDelay interval
     atomically $ get $ writeTVar var
   return (readTVar var, tid)
+
+-- |Poll given input every 100ms. Useful interval for iteractive
+-- things like wall switches.
+poll :: Query a -> IO (STM a, ThreadId)
+poll = pollWithInterval 100000
+
+-- |Ordinary relay. Refreshes ON state every 4 seconds.
+
+relayControl :: STM Bool -> Control Bool -> IO ThreadId
+relayControl = relayControlWithHold 4000000
+
+-- |Helper function for retreiving a single value from a query
+item :: Functor f => f [a] -> Int -> f a
+item list i = (!! i) <$> list
