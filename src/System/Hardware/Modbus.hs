@@ -6,6 +6,7 @@ module System.Hardware.Modbus
   , B.connect
   , Master
   , Stats
+  , Call
   , getStats
   , runMaster
   , sync
@@ -33,6 +34,9 @@ data Stats = Stats { writes   :: Int
 data Operation = Operation { operation :: IO ()
                            , exception :: B.ModbusException -> IO ()
                            }
+
+type Callback a = a -> STM ()
+type Call a = Callback a -> STM ()
 
 -- |Internally handle a single Modbus operation
 handleModbus :: TVar Stats -> Operation -> IO ()
@@ -76,7 +80,7 @@ runMaster handle = do
     threadDelay 5000
   return Master{..}
 
-readInputBits :: Master -> Int -> Int -> Int -> ([Bool] -> STM ()) -> STM ()
+readInputBits :: Master -> Int -> Int -> Int -> Call [Bool]
 readInputBits Master{..} slave addr nb target = do
   writeTQueue opQueue Operation
     { operation = do

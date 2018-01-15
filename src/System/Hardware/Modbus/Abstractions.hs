@@ -31,8 +31,8 @@ relayWithTimer timeout source control = do
         atomically (f source) >>= loop
   atomically source >>= forkIO . loop
 
--- |Poll single Modbus source
-poll :: Int -> ((a -> STM ()) -> STM ()) -> IO (STM a, ThreadId)
+-- |Poll single Modbus source periodically
+poll :: Int -> Call a -> IO (STM a, ThreadId)
 poll interval get = do
   -- Initial value setup is a bit challenging
   var <- newTVarIO Nothing
