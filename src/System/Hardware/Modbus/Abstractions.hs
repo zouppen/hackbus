@@ -35,13 +35,11 @@ relayWithTimer timeout source control = do
 poll :: Int -> Call a -> IO (STM a, ThreadId)
 poll interval get = do
   -- Initial value setup is a bit challenging
-  var <- newTVarIO Nothing
+  tmp <- newEmptyTMVarIO
+  atomically $ get $ putTMVar tmp
+  var <- atomically $ readTMVar tmp >>= newTVar
+  -- Actual loop
   tid <- forkIO $ forever $ do
     threadDelay interval
-    atomically $ get $ writeTVar var . Just
-  return (readJust var, tid)
-  where readJust var = do
-          a <- readTVar var
-          case a of
-            Just a  -> return a
-            Nothing -> retry
+    atomically $ get $ writeTVar var
+  return (readTVar var, tid)
