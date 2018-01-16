@@ -9,12 +9,13 @@ module System.Hardware.Modbus
   , runMaster
   , readInputBits
   , writeBit
+  , waitFailure
   ) where
 
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (catch, throw)
-import Control.Monad (forever)
+import Control.Monad (forever, when)
 import System.Hardware.Modbus.Types
 import qualified System.Hardware.Modbus.LowLevel as B
 
@@ -99,3 +100,9 @@ writeBit Master{..} slave addr status = do
 -- |Read statistics
 getStats :: Master -> STM Stats
 getStats Master{..} = readTVar stats
+
+-- |Return when failure occurs
+waitFailure :: STM Stats -> STM ()
+waitFailure stats = do
+  Stats{..} <- stats
+  when (fails == 0) retry

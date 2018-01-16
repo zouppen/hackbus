@@ -89,8 +89,3 @@ nop = return ()
 -- |Run action synchronously.
 sync :: STM (STM a) -> IO a
 sync act = atomically act >>= atomically
-
--- |Sleep forever, useful at the end of main function to keep the bus
--- running.
-sleepForever :: IO ()
-sleepForever = forever $ threadDelay maxBound

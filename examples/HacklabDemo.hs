@@ -44,4 +44,4 @@ main = do
     (putStrLn "Kerhoilta loppui")
     (putStrLn "Kerhoilta alkoi")
   putStrLn "Up and running"
-  sleepForever
+  atomically $ waitFailure $ getStats master
