@@ -4,7 +4,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (handle, throw)
 import Control.Monad (forever, unless)
-import System.Hardware.Modbus
+import System.Hardware.Modbus.Types
 
 offKeeper :: STM Bool -> STM Bool
 offKeeper source = do
@@ -85,6 +85,10 @@ item list i = (!! i) <$> list
 -- |Shorthand for doing nothing
 nop :: IO ()
 nop = return ()
+
+-- |Run action synchronously.
+sync :: STM (STM a) -> IO a
+sync act = atomically act >>= atomically
 
 -- |Sleep forever, useful at the end of main function to keep the bus
 -- running.

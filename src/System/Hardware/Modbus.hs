@@ -5,12 +5,8 @@ module System.Hardware.Modbus
   , B.newRTU
   , B.connect
   , Master
-  , Stats
-  , Query
-  , Control
   , getStats
   , runMaster
-  , sync
   , readInputBits
   , writeBit
   ) where
@@ -19,6 +15,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (catch, throw)
 import Control.Monad (forever)
+import System.Hardware.Modbus.Types
 import qualified System.Hardware.Modbus.LowLevel as B
 
 data Master = Master { opQueue  :: TQueue Operation
@@ -27,18 +24,9 @@ data Master = Master { opQueue  :: TQueue Operation
                      , stats    :: TVar Stats
                      }
 
-data Stats = Stats { writes   :: Int
-                   , retries  :: Int
-                   , fails    :: Int
-                   } deriving (Show, Eq, Ord)
-
 data Operation = Operation { operation :: IO ()
                            , exception :: B.ModbusException -> IO ()
                            }
-
-type Callback a = a -> STM ()
-type Query a = Callback a -> STM ()
-type Control a = a -> STM (STM ())
 
 -- |Internally handle a single Modbus operation
 handleModbus :: TVar Stats -> Operation -> IO ()
@@ -107,10 +95,6 @@ writeBit Master{..} slave addr status = do
     , exception = atomically . writeTVar var . throw
     }
   return $ readTVar var >>= check
-
--- |Run action synchronously.
-sync :: STM (STM a) -> IO a
-sync act = atomically act >>= atomically
 
 -- |Read statistics
 getStats :: Master -> STM Stats
