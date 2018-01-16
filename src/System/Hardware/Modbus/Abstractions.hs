@@ -74,9 +74,11 @@ pushButton source actOff actOn = do
           actOn
           handle True
 
--- |Button which toggles a state when it is pressed once.
-toggleButton :: STM Bool -> TVar Bool -> IO ThreadId
-toggleButton source var = pushButton source nop $ atomically $ modifyTVar var not
+-- |Button which toggles a state when it is pressed once. If the switch is normally open (the usual case), pass True to `no`.
+toggleButton :: Bool -> STM Bool -> TVar Bool -> IO ThreadId
+toggleButton no source var = if no then act nop toggle else act toggle nop
+  where act = pushButton source
+        toggle = atomically $ modifyTVar var not
 
 -- |Helper function for retreiving a single value from a query
 item :: Functor f => f [a] -> Int -> f a

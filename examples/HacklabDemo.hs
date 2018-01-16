@@ -29,10 +29,10 @@ main = do
   relayControl (readTVar pajaValot)     (writeBit master 1 2)
   relayControl (readTVar pajaLaitteet)  (writeBit master 1 3)
   -- Toggle states with Modbus input
-  toggleButton (inputKerho `item` 0) kerhoValot
-  toggleButton (inputKerho `item` 1) kerhoLaitteet
-  toggleButton (inputPaja  `item` 0) pajaValot
-  toggleButton (inputPaja  `item` 1) pajaLaitteet
+  toggleButton True  (inputKerho `item` 0) kerhoValot
+  toggleButton True  (inputKerho `item` 1) kerhoLaitteet
+  toggleButton False (inputPaja  `item` 0) pajaValot
+  toggleButton True  (inputPaja  `item` 1) pajaLaitteet
   -- Introduce a panic switch which turns off everything
   pushButton (inputKerho `item` 3) nop $ atomically $ do
     writeTVar kerhoValot    False
