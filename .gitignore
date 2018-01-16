@@ -1,11 +1,6 @@
-# Scons temps
-/config.log
-/*.pyc
-/.sconsign.dblite
-
-# Compiled
-/modclient
-*.o
-
 # Haskell
 /dist
+
+# Manual compile outputs
+*.o
+*.hi
