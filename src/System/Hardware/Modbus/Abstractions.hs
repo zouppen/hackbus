@@ -33,15 +33,14 @@ relayControlWithHold timeout source control = do
 
 -- |Poll single Modbus source periodically
 pollWithInterval :: Int -> Query a -> IO (STM a, ThreadId)
-pollWithInterval interval get = do
-  -- Initial value setup is a bit challenging
-  tmp <- newEmptyTMVarIO
-  atomically $ get $ putTMVar tmp
-  var <- atomically $ readTMVar tmp >>= newTVar
+pollWithInterval interval query = do
+  -- Query once, then loop
+  var <- sync query >>= newTVarIO
   -- Actual loop
   tid <- forkIO $ forever $ do
     threadDelay interval
-    atomically $ get $ writeTVar var
+    ans <- atomically query
+    atomically $ ans >>= writeTVar var
   return (readTVar var, tid)
 
 -- |Poll given input every 100ms. Useful interval for iteractive

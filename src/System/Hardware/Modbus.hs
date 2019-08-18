@@ -72,15 +72,16 @@ runMaster handle = do
   return Master{..}
 
 readInputBits :: Master -> Int -> Int -> Int -> Query [Bool]
-readInputBits Master{..} slave addr nb target = do
+readInputBits Master{..} slave addr nb = do
+  var <- newEmptyTMVar
   writeTQueue opQueue Operation
     { operation = do
         B.setSlave handle slave
         out <- B.readInputBits handle addr nb
-        atomically $ target out
-    , exception = atomically . target . throw
+        atomically $ putTMVar var out
+    , exception = atomically . (putTMVar var) . throw
     }
-  return ()
+  return $ takeTMVar var
   -- TODO add target function retry check. Should never block.
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
