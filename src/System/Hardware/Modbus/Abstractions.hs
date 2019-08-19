@@ -52,12 +52,6 @@ poll = pollWithInterval 100000
 relayControl :: STM Bool -> Control Bool -> IO ThreadId
 relayControl = relayControlWithHold 4000000
 
--- |Waits until input is true (e.g. button is pressed)
-waitUntil :: Bool -> STM Bool -> STM ()
-waitUntil state input = do
-  now <- input
-  unless (now == state) retry
-
 -- |Generic button which runs IO action every time a button is
 -- pressed.
 pushButton :: STM Bool -> IO () -> IO () -> IO ThreadId
@@ -65,11 +59,11 @@ pushButton source actOff actOn = do
   state <- atomically source
   forkIO $ handle state
   where handle True = do
-          atomically $ waitUntil False source
+          atomically $ source >>= check . not
           actOff
           handle False
         handle False = do
-          atomically $ waitUntil True source
+          atomically $ source >>= check
           actOn
           handle True
 
