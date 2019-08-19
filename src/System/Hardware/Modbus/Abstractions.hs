@@ -3,7 +3,7 @@ module System.Hardware.Modbus.Abstractions where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (handle, throw)
-import Control.Monad (forever, unless)
+import Control.Monad (forever, unless, when)
 import System.Hardware.Modbus.Types
 
 offKeeper :: STM Bool -> STM Bool
@@ -90,3 +90,27 @@ nop = return ()
 -- |Run action synchronously.
 sync :: STM (STM a) -> IO a
 sync act = atomically act >>= atomically
+
+-- |State machine for detecting load errors.
+loadSense :: STM Bool -> STM Bool -> Int -> IO (STM Bool, ThreadId)
+loadSense switch sense delay = do
+  var <- newTVarIO False
+  tid <- forkIO $ forever $ do
+    -- Start counting from the moment switch is turned on
+    atomically $ switch >>= check
+    wait <- readTVar <$> registerDelay delay
+    -- Let's see if we end up in a bad situation
+    atomically $ do
+      stillOn <- switch
+      when stillOn $ do
+        wait >>= check        -- Delay must elapse
+        sense >>= check . not -- And load must fail
+        writeTVar var True    -- Then we have an issue
+    -- Wait until we recover from the situation
+    atomically $ do
+      a <- switch
+      b <- sense
+      when (a /= b) retry
+      -- We have recovered
+      writeTVar var False
+  return (readTVar var, tid)
