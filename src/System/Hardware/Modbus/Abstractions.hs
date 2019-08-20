@@ -6,30 +6,16 @@ import Control.Exception (handle, throw)
 import Control.Monad (forever, unless, when)
 import System.Hardware.Modbus.Types
 
-offKeeper :: STM Bool -> STM Bool
-offKeeper source = do
-  state <- source
-  if state then return True else retry
-
-onKeeper :: TVar Bool -> STM Bool -> STM Bool
-onKeeper timer source = do
-  state <- source
-  timeout <- readTVar timer
-  if state && not timeout then retry else return state
-
--- Public functions follow
-
--- |Wrapper which makes any relay controllable via STM variable. If
--- the relay is on the state is refreshed every given microseconds.
-relayControlWithHold :: Int -> STM Bool -> Control Bool -> IO ThreadId
-relayControlWithHold timeout source control = do
-  let loop state = do
-        sync $ control state
-        f <- if state
-             then onKeeper <$> registerDelay timeout
-             else return offKeeper
-        atomically (f source) >>= loop
-  atomically source >>= forkIO . loop
+-- |Makes any output controllable via STM variable. State is refreshed
+-- every given microseconds.
+wireWithRefresh :: Eq a => Int -> STM a -> Control a -> IO ThreadId
+wireWithRefresh timeout source control = atomically source >>= forkIO . loop
+  where loop oldState = do
+          wait <- readTVar <$> registerDelay timeout
+          sync $ do
+            newState <- source
+            when (newState == oldState) $ wait >>= check
+            control newState
 
 -- |Poll single Modbus source periodically
 pollWithInterval :: Int -> Query a -> IO (STM a, ThreadId)
@@ -48,9 +34,9 @@ pollWithInterval interval query = do
 poll :: Query a -> IO (STM a, ThreadId)
 poll = pollWithInterval 100000
 
--- |Ordinary relay. Refreshes ON state every 4 seconds.
-relayControl :: STM Bool -> Control Bool -> IO ThreadId
-relayControl = relayControlWithHold 4000000
+-- |Ordinary relay or other output. Refreshes state every 4 seconds.
+wire :: Eq a => STM a -> Control a -> IO ThreadId
+wire = wireWithRefresh 4000000
 
 -- |Generic button which runs IO action every time a button is
 -- pressed.

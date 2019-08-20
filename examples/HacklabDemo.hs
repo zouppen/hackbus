@@ -24,10 +24,10 @@ main = do
   pajaValot     <- newTVarIO False
   pajaLaitteet  <- newTVarIO False
   -- Connect variables to given relays
-  relayControl (readTVar kerhoValot)    (writeBit master 1 0)
-  relayControl (readTVar kerhoLaitteet) (writeBit master 1 1)
-  relayControl (readTVar pajaValot)     (writeBit master 1 2)
-  relayControl (readTVar pajaLaitteet)  (writeBit master 1 3)
+  wire (readTVar kerhoValot)    (writeBit master 1 0)
+  wire (readTVar kerhoLaitteet) (writeBit master 1 1)
+  wire (readTVar pajaValot)     (writeBit master 1 2)
+  wire (readTVar pajaLaitteet)  (writeBit master 1 3)
   -- Toggle states with Modbus input
   toggleButton True  (inputKerho `item` 0) kerhoValot
   toggleButton True  (inputKerho `item` 1) kerhoLaitteet
