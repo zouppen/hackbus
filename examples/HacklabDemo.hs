@@ -16,8 +16,10 @@ main = do
   connect h
   master <- runMaster h
   -- Get input banks from both rooms
-  (inputKerho,_) <- poll $ readInputBits master 1 0 8
-  (inputPaja,_)  <- poll $ readInputBits master 2 0 8
+  ([kytkinKerhoValot, kytkinKerhoLaitteet, kytkinKerhoilta, kytkinPaniikki],_) <-
+    pollMany $ readInputBits master 1 0 4
+  ([kytkinPajaValot, kytkinPajaLaitteet],_) <-
+    pollMany $ readInputBits master 2 0 2
   -- Our switch variables, initially all OFF
   kerhoValot    <- newTVarIO False
   kerhoLaitteet <- newTVarIO False
@@ -29,18 +31,18 @@ main = do
   wire (readTVar pajaValot)     (writeBit master 1 2)
   wire (readTVar pajaLaitteet)  (writeBit master 1 3)
   -- Toggle states with Modbus input
-  toggleButton True  (inputKerho `item` 0) kerhoValot
-  toggleButton True  (inputKerho `item` 1) kerhoLaitteet
-  toggleButton False (inputPaja  `item` 0) pajaValot
-  toggleButton True  (inputPaja  `item` 1) pajaLaitteet
+  toggleButton True  kytkinKerhoValot    kerhoValot
+  toggleButton True  kytkinKerhoLaitteet kerhoLaitteet
+  toggleButton False kytkinPajaValot     pajaValot
+  toggleButton True  kytkinPajaLaitteet  pajaLaitteet
   -- Introduce a panic switch which turns off everything
-  pushButton (inputKerho `item` 3) nop $ atomically $ do
+  pushButton kytkinPaniikki nop $ atomically $ do
     writeTVar kerhoValot    False
     writeTVar kerhoLaitteet False
     writeTVar pajaValot     False
     writeTVar pajaLaitteet  False
   -- Report when club evening starts and ends
-  pushButton (inputKerho `item` 2)
+  pushButton kytkinKerhoilta
     (putStrLn "Kerhoilta loppui")
     (putStrLn "Kerhoilta alkoi")
   putStrLn "Up and running"

@@ -3,7 +3,7 @@ module System.Hardware.Modbus.Abstractions where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (handle, throw)
-import Control.Monad (forever, unless, when)
+import Control.Monad (forever, unless, when, zipWithM_)
 import System.Hardware.Modbus.Types
 
 -- |Makes any output controllable via STM variable. State is refreshed
@@ -18,21 +18,36 @@ wireWithRefresh timeout source control = atomically source >>= forkIO . loop
             control newState
 
 -- |Poll single Modbus source periodically
+pollRaw :: Int -> Query a -> (a -> STM ()) -> IO ThreadId
+pollRaw interval query f = forkIO $ forever $ do
+  threadDelay interval
+  ans <- atomically query
+  atomically $ ans >>= f
+
 pollWithInterval :: Int -> Query a -> IO (STM a, ThreadId)
 pollWithInterval interval query = do
-  -- Query once, then loop
+  -- Query once, then start polling
   var <- sync query >>= newTVarIO
-  -- Actual loop
-  tid <- forkIO $ forever $ do
-    threadDelay interval
-    ans <- atomically query
-    atomically $ ans >>= writeTVar var
+  tid <- pollRaw interval query $ writeTVar var
   return (readTVar var, tid)
 
--- |Poll given input every 100ms. Useful interval for iteractive
--- things like wall switches.
+pollManyWithInterval :: Int -> Query [a] -> IO ([STM a], ThreadId)
+pollManyWithInterval interval query = do
+  -- Query once, then start polling
+  vars <- sync query >>= mapM newTVarIO
+  tid <- pollRaw interval query $ zipWithM_ writeTVar vars
+  return (map readTVar vars, tid)
+
+-- |Poll given input every 100ms. Interval is sufficient for
+-- iteractive things like wall switches.
 poll :: Query a -> IO (STM a, ThreadId)
 poll = pollWithInterval 100000
+
+-- |Poll given input every 100ms and collect data as many STM
+-- variables. Useful for getting multiple values from a single
+-- register with only one read.
+pollMany :: Query [a] -> IO ([STM a], ThreadId)
+pollMany = pollManyWithInterval 100000
 
 -- |Ordinary relay or other output. Refreshes state every 4 seconds.
 wire :: Eq a => STM a -> Control a -> IO ThreadId
@@ -59,16 +74,12 @@ toggleButton no source var = if no then act nop toggle else act toggle nop
   where act = pushButton source
         toggle = atomically $ modifyTVar var not
 
--- |Helper function for retreiving a single value from a query
-item :: Functor f => f [a] -> Int -> f a
-item list i = (!! i) <$> list
-
 -- |Shorthand for doing nothing
 nop :: IO ()
 nop = return ()
 
 -- |Run action synchronously.
-sync :: STM (STM a) -> IO a
+sync :: Query a -> IO a
 sync act = atomically act >>= atomically
 
 -- |State machine for detecting load errors.
