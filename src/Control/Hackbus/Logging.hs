@@ -4,18 +4,19 @@ import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TQueue
+import System.IO
 
--- |Run monitor with given name, queue and input list of STM variables
-runMonitor :: (Traversable t, Eq a, Show a)
+-- |Watch named STM variables for changes
+addWatches :: (Traversable t, Eq a, Show a)
            => String
            -> TQueue String
            -> t (String, STM a)
            -> IO (t ThreadId)
-runMonitor name queue list = mapM (forkIO . watch (writeTQueue queue . simpleFormat name)) list
+addWatches name q = mapM (forkIO . watch (writeTQueue q . simpleFormat name))
 
--- |Stop running monitor
-stopMonitor :: Traversable t => t ThreadId -> IO ()
-stopMonitor = mapM_ killThread
+-- |Stop running watches
+stopWatches :: Traversable t => t ThreadId -> IO ()
+stopWatches = mapM_ killThread
 
 -- |Watch changes in a given STM variable
 watch :: Eq v => ((k, v) -> STM ()) -> (k, STM v) -> IO ()
@@ -35,3 +36,6 @@ simpleFormat name (k,v) = name ++ " " ++ k ++ ": " ++ show v
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue String)
 newMonitorQueue = newTQueueIO
+
+-- |Run monitor which prints to given handle
+runMonitor h q = forever $ atomically (readTQueue q) >>= hPutStrLn h
