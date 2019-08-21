@@ -12,10 +12,13 @@ wireWithRefresh :: Eq a => Int -> STM a -> Control a -> IO ThreadId
 wireWithRefresh timeout source control = atomically source >>= forkIO . loop
   where loop oldState = do
           wait <- readTVar <$> registerDelay timeout
-          sync $ do
+          (newState, cb) <- atomically $ do
             newState <- source
             when (newState == oldState) $ wait >>= check
-            control newState
+            cb <- control newState
+            return (newState, cb)
+          atomically cb
+          loop newState
 
 -- |Poll single Modbus source periodically
 pollRaw :: Int -> Query a -> (a -> STM ()) -> IO ThreadId
