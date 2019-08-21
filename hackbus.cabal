@@ -19,6 +19,7 @@ library
                  , System.Hardware.Modbus.Abstractions
                  , System.Hardware.Modbus.LowLevel
                  , System.Hardware.Modbus.Types
+                 , Control.Hackbus.Logging
   cc-options:      -std=gnu99
   pkgconfig-depends: libmodbus
   build-depends:
