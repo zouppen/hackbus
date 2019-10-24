@@ -8,9 +8,24 @@ Still work in progress, but used in daily basis at Hacklab Jyväskylä club room
 
 ## Installation
 
-TODO improve installation instructions.
+If you have Debian or Ubuntu, I recommend installing all dependencies
+from their repositories to minimize package clutter.
 
 ```
-sudo apt install cabal libghc-stm-dev libmodbus-dev
+sudo apt install \
+	cabal \
+	libghc-stm-dev \
+	libghc-text-dev \
+	libghc-aeson-dev \
+	libghc-network-dev \
+	libmodbus-dev 
 cabal update
+cabal install
+```
+
+On other systems with Cabal, run
+
+```
+cabal update
+cabal install
 ```
