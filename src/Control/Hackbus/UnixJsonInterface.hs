@@ -11,15 +11,8 @@ data Access = Access { reader :: Maybe (STM Value)
                      , writer :: Maybe (Value -> STM ())
                      }
 
--- MOCK HANDLER
-listenJsonQueries :: FilePath -> IO ()
-listenJsonQueries path = do
-  kissa <- newTVarIO (13 :: Int)
-  koira <- newTVarIO ("hau" :: String)
-  let m = M.fromList [("kissa", readonly kissa)
-                     ,("koira", readwrite koira)
-                     ]
-  listenUnixSocket (lineHandler $ handleQuery m) path
+listenJsonQueries :: M.Map Text Access -> FilePath -> IO ()
+listenJsonQueries m path = listenUnixSocket (lineHandler $ handleQuery m) path
 
 -- |Process queries coming from the socket. TODO make this more flexible.
 handleQuery :: M.Map Text Access -> LineAction
