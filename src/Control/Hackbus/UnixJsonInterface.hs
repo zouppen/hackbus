@@ -1,25 +1,45 @@
 module Control.Hackbus.UnixJsonInterface where
 
 import Data.Aeson
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Control.Hackbus.UnixSocket
 import Control.Hackbus.JsonCommands
 import Control.Concurrent.STM
+import qualified Data.Map.Lazy as M
 
 data Access = Access { reader :: Maybe (STM Value)
                      , writer :: Maybe (Value -> STM ())
                      }
 
+-- MOCK HANDLER
 listenJsonQueries :: FilePath -> IO ()
-listenJsonQueries = listenUnixSocket $ lineHandler $ handleQuery undefined
+listenJsonQueries path = do
+  kissa <- newTVarIO (13 :: Int)
+  koira <- newTVarIO ("hau" :: String)
+  let m = M.fromList [("kissa", readonly kissa)
+                     ,("koira", readwrite koira)
+                     ]
+  listenUnixSocket (lineHandler $ handleQuery m) path
 
-handleQuery :: t -> LineAction -- TODO mock
+-- |Process queries coming from the socket. TODO make this more flexible.
+handleQuery :: M.Map Text Access -> LineAction
 handleQuery m line = do
   ans <- case eitherDecode line of
     Left e            -> return $ Failed e
-    Right (Read k)    -> return $ Return $ toJSON (12::Int) -- MOCK
-    Right (Write k v) -> return $ Wrote -- MOCK
+    Right (Read k)    -> case look reader k of
+      Left e  -> return $ Failed e
+      Right f -> Return <$> atomically f
+    Right (Write k v) -> case look writer k of
+      Left e  -> return $ Failed e
+      Right f -> atomically (f v) >> return Wrote
   return $ encode ans
+  where
+    look :: (Access -> Maybe b) -> Text -> Either String b
+    look field k = case M.lookup k m of
+      Nothing  -> Left $ "Key not found: " ++ unpack k
+      Just acc -> case field acc of
+        Nothing -> Left $ "Permission denied: " ++ unpack k
+        Just f  -> Right f
 
 class Readable a where
   peek :: a b -> STM (Maybe b)
