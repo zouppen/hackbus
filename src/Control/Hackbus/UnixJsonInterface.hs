@@ -55,6 +55,9 @@ instance Writable TMVar where
 read' :: (Readable a, ToJSON b) => a b -> STM Value
 read' var = toJSON <$> peek var
 
+readUnsafe' :: ToJSON a => STM a -> STM Value
+readUnsafe' act = toJSON <$> act
+
 write' :: (Writable a, FromJSON b) => a b -> Value -> STM ()
 write' var = act' $ poke var
 
@@ -78,3 +81,7 @@ readwrite a = Access (Just (read' a)) (Just (write' a))
 -- |Run any STM action, read not supported
 action :: FromJSON a => (a -> STM ()) -> Access
 action f = Access Nothing (Just (act' f))
+
+-- |Run STM action. Unsafe in that sense the action may hide side effects
+readAction :: ToJSON a => STM a -> Access
+readAction f = Access (Just (readUnsafe' f)) Nothing
