@@ -1,5 +1,5 @@
 name:          hackbus
-version:       0.0.3
+version:       0.0.4
 synopsis:      Modbus library
 description:   Libmodbus bindings for Haskell.
 category:      Hardware
@@ -21,6 +21,8 @@ library
                  , System.Hardware.Modbus.Types
                  , Control.Hackbus.Logging
                  , Control.Hackbus.UnixJsonInterface
+                 , Control.Hackbus.UnixSocket
+                 , Control.Hackbus.JsonCommands
   cc-options:      -std=gnu99
   pkgconfig-depends: libmodbus
   build-depends:
