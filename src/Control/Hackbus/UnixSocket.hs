@@ -1,9 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Control.Hackbus.UnixSockets where
+module Control.Hackbus.UnixSocket where
 
-import Data.Aeson (eitherDecode, encode, toJSON)
 import Control.Concurrent (forkFinally)
-import qualified Control.Exception as E
+import Control.Exception (bracket)
 import Control.Monad (when, forever)
 import qualified Data.ByteString as B (hGetLine)
 import qualified Data.ByteString.Lazy as B
@@ -11,8 +10,6 @@ import Network.Socket
 import System.IO (Handle, IOMode(..), hClose)
 import System.Posix.Files (isSocket, getFileStatus, removeLink)
 import System.Directory (doesFileExist)
-
-import Control.Hackbus.JsonCommands
 
 type LineAction = B.ByteString -> IO B.ByteString 
 
@@ -29,7 +26,7 @@ clearDanglingSocket path = do
 listenUnixSocket :: (Handle -> IO ()) -> FilePath -> IO ()
 listenUnixSocket handler path = do
   clearDanglingSocket path
-  E.bracket open close loop
+  bracket open close loop
   where
     open = do
       sock <- socket AF_UNIX Stream defaultProtocol
@@ -46,14 +43,3 @@ lineHandler act handle = forever $ do
   line <- B.fromStrict <$> B.hGetLine handle
   ans <- act line
   B.hPut handle $ ans `B.snoc` 10
-
-handleQuery :: t -> B.ByteString -> IO B.ByteString
-handleQuery m line = do
-  ans <- case eitherDecode line of
-    Left e            -> return $ Failed e
-    Right (Read k)    -> return $ Return $ toJSON (12::Int) -- MOCK
-    Right (Write k v) -> return $ Wrote -- MOCK
-  return $ encode ans
-
-listenJsonQueries = listenUnixSocket $ lineHandler $ handleQuery undefined
-
