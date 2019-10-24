@@ -8,11 +8,13 @@ import Control.Monad (when, forever)
 import qualified Data.ByteString as B (hGetLine)
 import qualified Data.ByteString.Lazy as B
 import Network.Socket
-import System.IO (IOMode(..), hClose)
+import System.IO (Handle, IOMode(..), hClose)
 import System.Posix.Files (isSocket, getFileStatus, removeLink)
 import System.Directory (doesFileExist)
 
 import Control.Hackbus.JsonCommands
+
+type LineAction = B.ByteString -> IO B.ByteString 
 
 -- |Removes old dangling socket if it exists
 clearDanglingSocket :: FilePath -> IO ()
@@ -24,7 +26,8 @@ clearDanglingSocket path = do
       then removeLink path
       else fail "Socket path is a file"
 
-openUnixSocket path = do
+listenUnixSocket :: (Handle -> IO ()) -> FilePath -> IO ()
+listenUnixSocket handler path = do
   clearDanglingSocket path
   E.bracket open close loop
   where
@@ -36,12 +39,21 @@ openUnixSocket path = do
     loop sock = forever $ do
       (conn, _) <- accept sock
       h <- socketToHandle conn ReadWriteMode
-      forkFinally (handleQueries undefined h) (const $ hClose h)
+      forkFinally (handler h) $ const $ hClose h
 
-handleQueries m handle = forever $ do
+lineHandler :: LineAction -> Handle -> IO ()
+lineHandler act handle = forever $ do
   line <- B.fromStrict <$> B.hGetLine handle
+  ans <- act line
+  B.hPut handle $ ans `B.snoc` 10
+
+handleQuery :: t -> B.ByteString -> IO B.ByteString
+handleQuery m line = do
   ans <- case eitherDecode line of
     Left e            -> return $ Failed e
     Right (Read k)    -> return $ Return $ toJSON (12::Int) -- MOCK
     Right (Write k v) -> return $ Wrote -- MOCK
-  B.hPut handle $ encode ans
+  return $ encode ans
+
+listenJsonQueries = listenUnixSocket $ lineHandler $ handleQuery undefined
+
