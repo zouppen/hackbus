@@ -1,15 +1,17 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Hackbus.Logging
+import Control.Hackbus.UnixJsonInterface
+import Control.Monad
+import Data.Map.Lazy (fromList)
 import System.Environment (getArgs)
 import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
-import Control.Hackbus.Logging
-
 import System.IO
 import System.Process
-import Control.Monad
-import Control.Concurrent
 
 cmd = "DISPLAY= vlc --play-and-stop --no-playlist-autostart ~/energiaa.opus ~/killall.opus ~/seis.opus"
 
@@ -112,6 +114,16 @@ main = do
   pushButton valotJossakin
     (callCommand "~/matrix-hacklab 'Hacklabin sähköt sammuivat.'")
     (callCommand "~/matrix-hacklab 'Hacklabilla on nyt sähköt päällä!'")
+
+  -- UNIX socket API
+  let m = fromList [("kerho-valot", readAction swKerhoVasen)
+                   ,("kerho-sahkot", readonly viiveKerhoSahkot)
+                   ,("paja-valot", readAction swPajaVasen)
+                   ,("paja-sähköt", readonly viivePajaSahkot)
+                   ,("paja-seis", readAction hataSeis)
+                   ,("maalaus-valot", readonly maalausValot)
+                   ]
+  listenJsonQueries m "/tmp/automaatio"
 
   putStrLn "Up and running"
 
