@@ -81,9 +81,21 @@ main = do
     (atomically $ writeTVar viivePajaSahkot False)
     (atomically $ writeTVar viivePajaSahkot True)
 
+  -- Remote override
+  overrideKerhoSahkot <- newTVarIO False
+  overrideKerhoValot  <- newTVarIO False
+
+  let kerhoSahkot = or <$> sequence [ readTVar viiveKerhoSahkot
+                                    , readTVar overrideKerhoSahkot
+                                    ]
+
+  let kerhoValot = or <$> sequence [ swKerhoVasen
+                                   , readTVar overrideKerhoValot
+                                   ]
+
   -- Connect variables to given relays
-  wire (readTVar viiveKerhoSahkot)  (writeBit master 2 0)
-  wire swKerhoVasen  (writeBit master 2 1)
+  wire kerhoSahkot  (writeBit master 2 0)
+  wire kerhoValot   (writeBit master 2 1)
 
   -- Pajan sähköt
   wire (readTVar viivePajaSahkot)   (writeBit master 1 0)
@@ -122,6 +134,8 @@ main = do
                    ,("paja-sähköt", readonly viivePajaSahkot)
                    ,("paja-seis", readAction hataSeis)
                    ,("maalaus-valot", readonly maalausValot)
+                   ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
+                   ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
                    ]
   listenJsonQueries m "/tmp/automaatio"
 
