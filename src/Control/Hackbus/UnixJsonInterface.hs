@@ -5,6 +5,7 @@ import Data.Text (Text, unpack)
 import Control.Hackbus.UnixSocket
 import Control.Hackbus.JsonCommands
 import Control.Concurrent.STM
+import Control.Exception
 import qualified Data.Map.Lazy as M
 
 data Access = Access { reader :: Maybe (STM Value)
@@ -17,14 +18,15 @@ listenJsonQueries m path = listenUnixSocket (lineHandler $ handleQuery m) path
 -- |Process queries coming from the socket. TODO make this more flexible.
 handleQuery :: M.Map Text Access -> LineAction
 handleQuery m line = do
-  ans <- case eitherDecode line of
-    Left e            -> return $ Failed e
-    Right (Read k)    -> case look reader k of
-      Left e  -> return $ Failed e
-      Right f -> Return <$> atomically f
-    Right (Write k v) -> case look writer k of
-      Left e  -> return $ Failed e
-      Right f -> atomically (f v) >> return Wrote
+  ans <- handle exceptionToAnswer $ case eitherDecode line of
+    Left e            -> fail e
+    Right (Read k)    -> do
+      f <- look reader k
+      Return <$> atomically f
+    Right (Write k v) -> do
+      f <- look writer k
+      atomically (f v)
+      return Wrote
   return $ encode ans
   where
     look :: (Monad m) => (Access -> Maybe b) -> Text -> m b
@@ -33,6 +35,11 @@ handleQuery m line = do
       Just acc -> case field acc of
         Nothing -> fail $ "Permission denied: " ++ unpack k
         Just f  -> return f
+
+-- |Catches all exceptions and returns them to the client. NB! May
+-- reveal internal implementation details.
+exceptionToAnswer :: SomeException -> IO Answer
+exceptionToAnswer e = return $ Failed $ show e
 
 class Readable a where
   peek :: a b -> STM (Maybe b)
