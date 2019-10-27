@@ -27,12 +27,12 @@ handleQuery m line = do
       Right f -> atomically (f v) >> return Wrote
   return $ encode ans
   where
-    look :: (Access -> Maybe b) -> Text -> Either String b
+    look :: (Monad m) => (Access -> Maybe b) -> Text -> m b
     look field k = case M.lookup k m of
-      Nothing  -> Left $ "Key not found: " ++ unpack k
+      Nothing  -> fail $ "Key not found: " ++ unpack k
       Just acc -> case field acc of
-        Nothing -> Left $ "Permission denied: " ++ unpack k
-        Just f  -> Right f
+        Nothing -> fail $ "Permission denied: " ++ unpack k
+        Just f  -> return f
 
 class Readable a where
   peek :: a b -> STM (Maybe b)
