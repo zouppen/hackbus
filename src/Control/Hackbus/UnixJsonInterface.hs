@@ -20,15 +20,21 @@ handleQuery :: M.Map Text Access -> LineAction
 handleQuery m line = do
   ans <- handle exceptionToAnswer $ case eitherDecode line of
     Left e            -> fail e
-    Right (Read k)    -> do
-      f <- look reader k
-      Return <$> atomically f
-    Right (Write k v) -> do
-      f <- look writer k
-      atomically (f v)
+    Right (Read keys) -> do
+      list <- atomically $ mapM readKey keys
+      return $ Return $ M.fromList list
+    Right (Write m) -> do
+      atomically $ mapM writeKey $ M.toList m
       return Wrote
   return $ encode ans
   where
+    readKey key = do
+      f <- look reader key
+      value <- f
+      return (key, value)
+    writeKey (key, value) = do
+      f <- look writer key
+      f value
     look :: (Monad m) => (Access -> Maybe b) -> Text -> m b
     look field k = case M.lookup k m of
       Nothing  -> fail $ "Key not found: " ++ unpack k

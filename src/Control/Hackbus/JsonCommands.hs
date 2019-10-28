@@ -5,20 +5,16 @@ import Data.Aeson
 import qualified Data.Text as T
 import qualified Data.Map.Lazy as M
 
-data Command = Read T.Text | Write T.Text Value deriving (Show)
+data Command = Read [T.Text] | Write (M.Map T.Text Value) deriving (Show)
 
-data Answer = Wrote | Return Value | Failed String deriving (Show)
+data Answer = Wrote | Return (M.Map T.Text Value) | Failed String deriving (Show)
 
 instance FromJSON Command where
-  parseJSON = withObject "Command" $ \v -> do
+  parseJSON = withObject "Commands" $ \v -> do
     method  <- v .: "method"
     case method of
       "r" -> Read <$> v .: "params"
-      "w" -> do
-        params <- v .: "params"
-        case M.toList params of
-          [(k,v)] -> return $ Write k v
-          _ -> fail "Multiple values not supported yet"
+      "w" -> Write <$> v .: "params"
       x -> fail $ "Unknown command: " ++ x
 
 instance ToJSON Answer where
