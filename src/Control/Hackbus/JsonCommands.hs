@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Control.Hackbus.JsonCommands where
+module Control.Hackbus.JsonCommands (Command(..), Answer(..)) where
 
 import Control.Applicative
 import Control.Monad (liftM)
@@ -12,7 +12,7 @@ data Command = Read [T.Text] | Write (M.Map T.Text Value) deriving (Show)
 data Answer = Wrote | Return (M.Map T.Text Value) | Failed String deriving (Show)
 
 instance FromJSON Command where
-  parseJSON = withObject "Commands" $ \v -> do
+  parseJSON = withObject "Command" $ \v -> do
     method <- v .: "method"
     case method of
       "r" -> Read <$> (v .: "params" <|> s (v .: "params"))
@@ -21,6 +21,9 @@ instance FromJSON Command where
     where s = liftM pure -- In case of single value we don't need a list
 
 instance ToJSON Answer where
-  toJSON Wrote      = object []
-  toJSON (Return x) = object ["v" .= x]
-  toJSON (Failed x) = object ["error" .= x]
+  toJSON Wrote      = rpcAns []
+  toJSON (Return x) = rpcAns ["result" .= x]
+  toJSON (Failed x) = rpcAns ["error" .= x]
+
+rpcAns xs = object (version:xs)
+  where version = "jsonrpc" .= ("2.0" :: T.Text)
