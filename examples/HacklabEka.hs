@@ -124,8 +124,8 @@ main = do
                                       ]
   
   pushButton valotJossakin
-    (callCommand "~/matrix-hacklab 'Hacklabin sähköt sammuivat.'")
-    (callCommand "~/matrix-hacklab 'Hacklabilla on nyt sähköt päällä!'")
+    (callCommand "~/matrix-hacklab 'Hacklabin sähköt sammuivat.';sudo systemctl stop aikamerkki.timer")
+    (callCommand "~/matrix-hacklab 'Hacklabilla on nyt sähköt päällä!';sudo systemctl start aikamerkki.timer")
 
   -- UNIX socket API
   let m = fromList [("kerho-valot", readAction swKerhoVasen)
