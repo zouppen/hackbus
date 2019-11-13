@@ -12,13 +12,7 @@ import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
 import System.IO
 import System.Process
-
-cmd = "DISPLAY= vlc --play-and-stop --no-playlist-autostart ~/energiaa.opus ~/killall.opus ~/seis.opus"
-
-hCmd :: Handle -> String -> IO ()
-hCmd h cmd = do
-  hPutStrLn h cmd
-  hFlush h
+import Media.Streaming.Vlc
 
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay
@@ -43,8 +37,8 @@ main = do
   master <- runMaster h
 
   -- Audio source
-  (Just commandH, _, _, procH) <- createProcess (shell cmd){ std_in = CreatePipe }
-  let vlc = hCmd commandH
+  vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus"]
+  let vlc = vlcCmd vlcH
 
   --let swKerhoOikea = return True
   
