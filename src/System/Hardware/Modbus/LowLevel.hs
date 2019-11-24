@@ -32,17 +32,18 @@ instance Exception ModbusException
 
 data ModbusContext
 type ModbusHandle = ForeignPtr ModbusContext
+type ModbusPtr = Ptr ModbusContext
 
-foreign import ccall "modbus_new_rtu" modbus_new_rtu :: CString -> Int -> Char -> Int -> Int -> IO (Ptr ModbusContext)
-foreign import ccall "modbus_connect" modbus_connect :: Ptr ModbusContext -> IO Int
-foreign import ccall "modbus_set_slave" modbus_set_slave :: Ptr ModbusContext -> Int -> IO Int
-foreign import ccall "modbus_read_input_bits" modbus_read_input_bits :: Ptr ModbusContext -> Int -> Int -> Ptr Word8 -> IO Int
-foreign import ccall "modbus_read_registers" modbus_read_registers :: Ptr ModbusContext  -> Int -> Int -> Ptr Word16 -> IO Int
-foreign import ccall "modbus_write_bit" modbus_write_bit :: Ptr ModbusContext -> Int -> Int -> IO Int
-foreign import ccall "modbus_write_register" modbus_write_register :: Ptr ModbusContext -> Int -> Word16 -> IO Int
+foreign import ccall "modbus_new_rtu" modbus_new_rtu :: CString -> Int -> Char -> Int -> Int -> IO (ModbusPtr)
+foreign import ccall "modbus_connect" modbus_connect :: ModbusPtr -> IO Int
+foreign import ccall "modbus_set_slave" modbus_set_slave :: ModbusPtr -> Int -> IO Int
+foreign import ccall "modbus_read_input_bits" modbus_read_input_bits :: ModbusPtr -> Int -> Int -> Ptr Word8 -> IO Int
+foreign import ccall "modbus_read_registers" modbus_read_registers :: ModbusPtr  -> Int -> Int -> Ptr Word16 -> IO Int
+foreign import ccall "modbus_write_bit" modbus_write_bit :: ModbusPtr -> Int -> Int -> IO Int
+foreign import ccall "modbus_write_register" modbus_write_register :: ModbusPtr -> Int -> Word16 -> IO Int
 foreign import ccall "modbus_strerror" modbus_strerror :: Errno -> IO CString
-foreign import ccall "modbus_close" modbus_close :: Ptr ModbusContext -> IO ()
-foreign import ccall "&modbus_free" modbus_free :: FunPtr (Ptr ModbusContext -> IO ())
+foreign import ccall "modbus_close" modbus_close :: ModbusPtr -> IO ()
+foreign import ccall "&modbus_free" modbus_free :: FunPtr (ModbusPtr -> IO ())
 
 failModbus :: IO ()
 failModbus = do
@@ -76,7 +77,7 @@ setSlave h slaveID = do
   when (out /= 0) failModbus
 
 -- |Internal function for reading an array. Wraps all C stuff inside.
-readRaw :: Storable a => (Ptr ModbusContext -> Int -> Int -> Ptr a -> IO Int) -> ([a] -> b) -> ModbusHandle -> Int -> Int -> IO b
+readRaw :: Storable a => (ModbusPtr -> Int -> Int -> Ptr a -> IO Int) -> ([a] -> b) -> ModbusHandle -> Int -> Int -> IO b
 readRaw action f h addr nb = allocaArray nb $ \dest -> do
   out <- withForeignPtr h $ \p -> action p addr nb dest
   when (out /= nb) failModbus
@@ -90,7 +91,7 @@ readInputBits = readRaw modbus_read_input_bits $ map (==1)
 readRegisters :: ModbusHandle -> Int -> Int -> IO [Word16]
 readRegisters = readRaw modbus_read_registers id
 
-writeRaw :: (Ptr ModbusContext -> Int -> b -> IO Int) -> (a -> b) -> ModbusHandle -> Int -> a -> IO ()
+writeRaw :: (ModbusPtr -> Int -> b -> IO Int) -> (a -> b) -> ModbusHandle -> Int -> a -> IO ()
 writeRaw action f h addr value = do
   out <- withForeignPtr h $ \p -> action p addr (f value)
   when (out /= 1) $ failModbus
