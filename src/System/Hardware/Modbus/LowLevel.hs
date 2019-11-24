@@ -7,7 +7,9 @@ module System.Hardware.Modbus.LowLevel
   , connect
   , setSlave
   , readInputBits
+  , readRegisters
   , writeBit
+  , writeRegister
   , close
   ) where
 
@@ -20,6 +22,7 @@ import Foreign.C
 import Foreign.C.Error
 import Foreign.ForeignPtr
 import Foreign.Marshal.Array
+import Foreign.Storable (Storable)
 import Foreign.Ptr
 
 data ModbusException = ModbusException { modbusErrno    :: Int32
@@ -34,7 +37,9 @@ foreign import ccall "modbus_new_rtu" modbus_new_rtu :: CString -> Int -> Char -
 foreign import ccall "modbus_connect" modbus_connect :: Ptr ModbusContext -> IO Int
 foreign import ccall "modbus_set_slave" modbus_set_slave :: Ptr ModbusContext -> Int -> IO Int
 foreign import ccall "modbus_read_input_bits" modbus_read_input_bits :: Ptr ModbusContext -> Int -> Int -> Ptr Word8 -> IO Int
+foreign import ccall "modbus_read_registers" modbus_read_registers :: Ptr ModbusContext  -> Int -> Int -> Ptr Word16 -> IO Int
 foreign import ccall "modbus_write_bit" modbus_write_bit :: Ptr ModbusContext -> Int -> Int -> IO Int
+foreign import ccall "modbus_write_register" modbus_write_register :: Ptr ModbusContext -> Int -> Word16 -> IO Int
 foreign import ccall "modbus_strerror" modbus_strerror :: Errno -> IO CString
 foreign import ccall "modbus_close" modbus_close :: Ptr ModbusContext -> IO ()
 foreign import ccall "&modbus_free" modbus_free :: FunPtr (Ptr ModbusContext -> IO ())
@@ -70,16 +75,33 @@ setSlave h slaveID = do
   out <- withForeignPtr h $ \p -> modbus_set_slave p slaveID
   when (out /= 0) failModbus
 
-readInputBits :: ModbusHandle -> Int -> Int -> IO [Bool]
-readInputBits h addr nb = allocaArray nb $ \dest -> do
-  out <- withForeignPtr h $ \p -> modbus_read_input_bits p addr nb dest
+-- |Internal function for reading an array. Wraps all C stuff inside.
+readRaw :: Storable a => (Ptr ModbusContext -> Int -> Int -> Ptr a -> IO Int) -> ([a] -> b) -> ModbusHandle -> Int -> Int -> IO b
+readRaw action f h addr nb = allocaArray nb $ \dest -> do
+  out <- withForeignPtr h $ \p -> action p addr nb dest
   when (out /= nb) failModbus
-  map (==1) <$> peekArray nb dest
+  f <$> peekArray nb dest
 
-writeBit :: ModbusHandle -> Int -> Bool -> IO ()
-writeBit h addr status = do
-  out <- withForeignPtr h $ \p -> modbus_write_bit p addr (fromEnum status)
+-- |The function uses the Modbus function code 0x02 (read input status).
+readInputBits :: ModbusHandle -> Int -> Int -> IO [Bool]
+readInputBits = readRaw modbus_read_input_bits $ map (==1)
+
+-- |The function uses the Modbus function code 0x03 (read holding registers).
+readRegisters :: ModbusHandle -> Int -> Int -> IO [Word16]
+readRegisters = readRaw modbus_read_registers id
+
+writeRaw :: (Ptr ModbusContext -> Int -> b -> IO Int) -> (a -> b) -> ModbusHandle -> Int -> a -> IO ()
+writeRaw action f h addr value = do
+  out <- withForeignPtr h $ \p -> action p addr (f value)
   when (out /= 1) $ failModbus
+
+-- |The function uses the Modbus function code 0x05 (force single coil).
+writeBit :: ModbusHandle -> Int -> Bool -> IO ()
+writeBit = writeRaw modbus_write_bit fromEnum
+
+-- |The function uses the Modbus function code 0x06 (preset single register).
+writeRegister :: ModbusHandle -> Int -> Word16 -> IO ()
+writeRegister = writeRaw modbus_write_register id
 
 close :: ModbusHandle -> IO ()
 close h = withForeignPtr h modbus_close
