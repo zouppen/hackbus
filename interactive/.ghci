@@ -1,0 +1,4 @@
+:m +System.Hardware.Modbus
+:l Interactive
+h <- modbusInit
+putStrLn "Initialized, ModbusHandle in \"h\""
