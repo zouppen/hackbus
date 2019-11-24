@@ -30,7 +30,7 @@ vlcCmd Vlc{..} cmd = do
 -- |Close VLC cleanly
 vlcClose :: Vlc -> IO ()
 vlcClose Vlc{..} = do
-  -- Normally, VLC listens for EOF and handle closure end the process
+  -- Normally, VLC listens for EOF and handle closure ends the process
   hClose commandH
   waitForProcess procH
   hClose nullH
