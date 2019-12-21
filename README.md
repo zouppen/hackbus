@@ -18,7 +18,8 @@ sudo apt install \
 	libghc-text-dev \
 	libghc-aeson-dev \
 	libghc-network-dev \
-	libmodbus-dev 
+	libghc-readline-dev \
+	libmodbus-dev
 cabal update
 cabal install
 ```

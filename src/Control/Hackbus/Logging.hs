@@ -5,11 +5,12 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TQueue
 import System.IO
+import qualified Data.ByteString.Lazy.Char8 as B
 
 -- |Watch named STM variables for changes
 addWatches :: (Traversable t, Eq a, Show a)
            => String
-           -> TQueue String
+           -> TQueue B.ByteString
            -> t (String, STM a)
            -> IO (t ThreadId)
 addWatches name q = mapM (forkIO . watch (writeTQueue q . simpleFormat name))
@@ -29,13 +30,14 @@ watch enq (key,source) = do
     writeTVar oldVar new
     enq (key,new)
 
--- |Formatter for simple things which have sane 
-simpleFormat :: Show a => String -> (String, a) -> String
-simpleFormat name (k,v) = name ++ " " ++ k ++ ": " ++ show v
+-- |Formatter for types which have Show instance
+simpleFormat :: Show a => String -> (String, a) -> B.ByteString
+simpleFormat name (k,v) = B.pack $ name ++ " " ++ k ++ ": " ++ show v
 
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue String)
 newMonitorQueue = newTQueueIO
 
 -- |Run monitor which prints to given handle
-runMonitor h q = forever $ atomically (readTQueue q) >>= hPutStrLn h
+runMonitor h q = forever $ atomically (readTQueue q) >>= act
+  where act msg = B.hPut h $ B.snoc msg '\n'
