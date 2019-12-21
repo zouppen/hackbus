@@ -7,7 +7,6 @@ import Control.Concurrent.STM.TQueue
 import System.IO
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Aeson (ToJSON, toJSON, encode)
-import Data.Map.Lazy (singleton)
 import Data.Text (Text)
 
 import Control.Hackbus.JsonCommands
@@ -36,7 +35,7 @@ watch enq (key,source) = do
 
 -- |JSON formatter
 jsonFormat :: ToJSON a => (Text, a) -> B.ByteString
-jsonFormat (k,v) = encode $ Return $ singleton k $ toJSON v
+jsonFormat (k,v) = encode $ Report k $ toJSON v
 
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue B.ByteString)
