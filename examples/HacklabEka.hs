@@ -90,6 +90,7 @@ main = do
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
+  wire kerhoValot   (writeBit master 2 2) -- Tykin valot
 
   -- Pajan sähköt
   wire (readTVar viivePajaSahkot)   (writeBit master 1 0)
@@ -131,9 +132,7 @@ main = do
                    ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
                    ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
                    ]
-  listenJsonQueries m "/tmp/automaatio"
-
-  putStrLn "Up and running"
+  forkIO $ listenJsonQueries m "/tmp/automaatio"
 
   -- Start some monitors
   q <- newMonitorQueue
@@ -148,6 +147,8 @@ main = do
                ,("maalaushuone-valot", readTVar maalausValot)
                ,("powered", valotJossakin)
                ]
-  runMonitor stdout q
+  forkIO $ runMonitor stdout q
+
+  putStrLn "Up and running"
   
   atomically $ waitFailure $ getStats master
