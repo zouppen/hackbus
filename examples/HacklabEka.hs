@@ -137,16 +137,17 @@ main = do
 
   -- Start some monitors
   q <- newMonitorQueue
-  addWatches "log" q [("kerhotila-valot", swKerhoVasen)
-                     ,("kerhotila-sähköt-katkasin", swKerhoOikea)
-                     ,("kerhotila-sähköt", readTVar viiveKerhoSahkot)
-                     ,("työpaja-valot", swPajaVasen)
-                     ,("työpaja-sähköt-katkaisin", swPajaOikea)
-                     ,("työpaja-sähköt", readTVar viivePajaSahkot)
-                     ,("kerhotila-kuorma", kerhoKuorma)
-                     ,("työpaja-hätäseis", hataSeis)
-                     ,("maalaushuone-valot", readTVar maalausValot)
-                     ]
+  addWatches q [("kerhotila-valot", swKerhoVasen)
+               ,("kerhotila-sähköt-katkasin", swKerhoOikea)
+               ,("kerhotila-sähköt", readTVar viiveKerhoSahkot)
+               ,("työpaja-valot", swPajaVasen)
+               ,("työpaja-sähköt-katkaisin", swPajaOikea)
+               ,("työpaja-sähköt", readTVar viivePajaSahkot)
+               ,("kerhotila-kuorma", kerhoKuorma)
+               ,("työpaja-hätäseis", hataSeis)
+               ,("maalaushuone-valot", readTVar maalausValot)
+               ,("powered", valotJossakin)
+               ]
   runMonitor stdout q
   
   atomically $ waitFailure $ getStats master
