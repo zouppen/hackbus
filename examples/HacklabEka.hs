@@ -117,10 +117,6 @@ main = do
                                       , swPajaOikea
                                       , readTVar maalausValot
                                       ]
-  
-  pushButton valotJossakin
-    (callCommand "~/matrix-hacklab 'Hacklabin sähköt sammuivat.';sudo systemctl stop aikamerkki.timer")
-    (callCommand "~/matrix-hacklab 'Hacklabilla on nyt sähköt päällä!';sudo systemctl start aikamerkki.timer")
 
   -- UNIX socket API
   let m = fromList [("kerho-valot", readAction swKerhoVasen)
