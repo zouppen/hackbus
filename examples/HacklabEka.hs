@@ -47,7 +47,7 @@ main = do
     swKerhoOikea,
     _,
     _,
-    _,
+    loadVideotykki,
     _,
     _,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
@@ -79,18 +79,14 @@ main = do
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
 
-  let kerhoSahkot = or <$> sequence [ readTVar viiveKerhoSahkot
-                                    , readTVar overrideKerhoSahkot
-                                    ]
-
-  let kerhoValot = or <$> sequence [ swKerhoVasen
-                                   , readTVar overrideKerhoValot
-                                   ]
-
+  let kerhoSahkot = (||) <$> readTVar viiveKerhoSahkot <*> readTVar overrideKerhoSahkot
+  let kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
+  let tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
+  
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
-  wire kerhoValot   (writeBit master 2 2) -- Tykin valot
+  wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
 
   -- Pajan sähköt
   wire (readTVar viivePajaSahkot)   (writeBit master 1 0)
