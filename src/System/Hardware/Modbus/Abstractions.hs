@@ -4,21 +4,22 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (handle, throw)
 import Control.Monad (forever, unless, when, zipWithM_)
+import Control.Monad.Loops (iterateM_)
+
 import System.Hardware.Modbus.Types
 
 -- |Makes any output controllable via STM variable. State is refreshed
 -- every given microseconds.
 wireWithRefresh :: Eq a => Int -> STM a -> Control a -> IO ThreadId
-wireWithRefresh timeout source control = atomically source >>= forkIO . loop
-  where loop oldState = do
-          wait <- readTVar <$> registerDelay timeout
-          (newState, cb) <- atomically $ do
-            newState <- source
-            when (newState == oldState) $ wait >>= check
-            cb <- control newState
-            return (newState, cb)
-          atomically cb
-          loop newState
+wireWithRefresh timeout source control = forkIO $ flip iterateM_ (const False) $ \same -> do
+  wait <- readTVar <$> registerDelay timeout
+  (state, cb) <- atomically $ do
+    state <- source
+    when (same state) $ wait >>= check
+    cb <- control state
+    return (state, cb)
+  atomically cb
+  return (state ==)
 
 -- |Poll single Modbus source periodically
 pollRaw :: Int -> Query a -> (a -> STM ()) -> IO ThreadId
