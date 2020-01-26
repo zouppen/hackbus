@@ -14,6 +14,8 @@ import System.IO
 import System.Process
 import Media.Streaming.Vlc
 
+import ActivityDetect
+
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay
   waitAct
@@ -39,6 +41,9 @@ main = do
   -- Audio source
   vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus"]
   let vlc = vlcCmd vlcH
+
+  -- Unifi motion
+  (_, pajaMotion) <- activityDetect 5000000 "inotifywait -qmr --format x /mnt/jako/valvonta/a47395ea-4762-3e3c-9c9f-ede2780bcdaa -e create"
 
   --let swKerhoOikea = return True
   
@@ -87,6 +92,10 @@ main = do
                                    , readTVar overrideKerhoValot
                                    ]
 
+  let pajaValot = or <$> sequence [ liftWithRetry pajaMotion
+                                  , swPajaVasen
+                                  ]
+
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
@@ -96,8 +105,8 @@ main = do
   wire (readTVar viivePajaSahkot)   (writeBit master 1 0)
 
   -- Valot myös varastoon samalla kun pajaan
-  wire swPajaVasen   (writeBit master 1 1)
-  wire swPajaVasen   (writeBit master 1 2)
+  wire pajaValot    (writeBit master 1 1)
+  wire pajaValot    (writeBit master 1 2)
 
   -- Maalaushuoneessa on toggle
   maalausValot <- newTVarIO False
