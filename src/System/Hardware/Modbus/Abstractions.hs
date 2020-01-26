@@ -17,9 +17,9 @@ wireWithRefresh timeout source control = forkIO $ flip iterateM_ (const False) $
     state <- source
     when (same state) $ wait >>= check
     cb <- control state
-    return (state, cb)
+    pure (state, cb)
   atomically cb
-  return (state ==)
+  pure (state ==)
 
 -- |Poll single Modbus source periodically
 pollRaw :: Int -> Query a -> (a -> STM ()) -> IO ThreadId
