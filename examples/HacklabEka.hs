@@ -68,17 +68,11 @@ main = do
 
   -- Viivekatkasiija
   viiveKerhoSahkot <- atomically $ swKerhoOikea >>= newTVar
-  viivePajaSahkot <- atomically $ swPajaOikea >>= newTVar
 
   delayOffSwitch swKerhoOikea 4000000
     (vlc "goto 4")
     (atomically $ writeTVar viiveKerhoSahkot False)
     (atomically (writeTVar viiveKerhoSahkot True) >> vlc "goto 5")
-
-  delayOffSwitch swPajaOikea 4000000
-    nop
-    (atomically $ writeTVar viivePajaSahkot False)
-    (atomically $ writeTVar viivePajaSahkot True)
 
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
@@ -95,11 +89,11 @@ main = do
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
 
   -- Pajan sähköt
-  wire (readTVar viivePajaSahkot)   (writeBit master 1 0)
+  wire swPajaOikea   (writeBit master 1 0)
 
-  -- Valot myös varastoon samalla kun pajaan
+  -- Valot pajaan liikkeellä, varastoon kytkimellä
   wire pajaValot    (writeBit master 1 1)
-  wire pajaValot    (writeBit master 1 2)
+  wire swPajaVasen  (writeBit master 1 2)
 
   -- Maalaushuoneessa on toggle
   maalausValot <- newTVarIO False
@@ -107,7 +101,7 @@ main = do
   wire (readTVar maalausValot) (writeBit master 1 3)
 
   -- Pajan hätäseis ja kerhon pistorasioiden sulake
-  hataSeis <- fst <$> loadSense (readTVar viivePajaSahkot) loadPaja 500000
+  hataSeis <- fst <$> loadSense swPajaOikea loadPaja 500000
   kerhoKuorma <- fst <$> loadSense swKerhoOikea loadKerhoRasia 500000
 
   pushButton hataSeis nop $ vlc "goto 3"
@@ -115,7 +109,6 @@ main = do
   -- Golffataan vähän monadeilla
   let valotJossakin = or <$> sequence [ swKerhoVasen
                                       , readTVar viiveKerhoSahkot
-                                      , swPajaVasen
                                       , swPajaOikea
                                       , readTVar maalausValot
                                       ]
@@ -124,7 +117,7 @@ main = do
   let m = fromList [("kerho-valot", readAction swKerhoVasen)
                    ,("kerho-sahkot", readonly viiveKerhoSahkot)
                    ,("paja-valot", readAction swPajaVasen)
-                   ,("paja-sähköt", readonly viivePajaSahkot)
+                   ,("paja-sähköt", readAction swPajaOikea)
                    ,("paja-seis", readAction hataSeis)
                    ,("maalaus-valot", readonly maalausValot)
                    ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
@@ -138,8 +131,7 @@ main = do
                ,("kerhotila-sähköt-katkasin", swKerhoOikea)
                ,("kerhotila-sähköt", readTVar viiveKerhoSahkot)
                ,("työpaja-valot", swPajaVasen)
-               ,("työpaja-sähköt-katkaisin", swPajaOikea)
-               ,("työpaja-sähköt", readTVar viivePajaSahkot)
+               ,("työpaja-sähköt", swPajaOikea)
                ,("kerhotila-kuorma", kerhoKuorma)
                ,("työpaja-hätäseis", hataSeis)
                ,("maalaushuone-valot", readTVar maalausValot)
