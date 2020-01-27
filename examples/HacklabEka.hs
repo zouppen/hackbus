@@ -43,7 +43,7 @@ main = do
   let vlc = vlcCmd vlcH
 
   -- Unifi motion
-  (_, pajaMotion) <- activityDetect 5000000 "inotifywait -qmr --format x /mnt/jako/valvonta/a47395ea-4762-3e3c-9c9f-ede2780bcdaa -e create"
+  (_, pajaMotion) <- activityDetect 120000000 "inotifywait -qmr --format x /mnt/jako/valvonta/a47395ea-4762-3e3c-9c9f-ede2780bcdaa -e create"
 
   --let swKerhoOikea = return True
   
