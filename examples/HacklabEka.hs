@@ -81,7 +81,7 @@ main = do
   let kerhoSahkot = (||) <$> readTVar viiveKerhoSahkot <*> readTVar overrideKerhoSahkot
   let kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
   let tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
-  let pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaVasen
+  let pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaOikea
 
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
