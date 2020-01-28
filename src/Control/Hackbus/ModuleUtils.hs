@@ -10,7 +10,7 @@ import Control.Hackbus.Trinary (Input, get)
 data Equality a = Const Bool | Equals a
 type StateVar a = TVar (Equality a)
 
-
+stateChanger :: Eq a => StateVar a -> Input a -> STM a
 stateChanger stateVar source = do
   oldState <- readTVar stateVar
   state <- get source
@@ -27,8 +27,7 @@ wireSTM :: Eq a => StateVar a -> Input a -> (a -> STM ()) -> IO ThreadId
 wireSTM stateVar source control =
   forkIO $
   forever $
-  atomically $
-  stateChanger stateVar source >>= control
+  atomically $ stateChanger stateVar source >>= control
 
 -- |Execute given IO action when STM action changes
 wireIO :: Eq a => StateVar a -> Input a -> (a -> IO ()) -> IO ThreadId
