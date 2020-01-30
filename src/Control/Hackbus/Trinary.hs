@@ -4,6 +4,7 @@ import Prelude as P
 import Control.Monad
 import Control.Concurrent.STM (STM, atomically, retry)
 
+-- Kleene logic
 -- https://en.wikipedia.org/wiki/Three-valued_logic
 
 type Input a = STM (Maybe a)
@@ -16,10 +17,10 @@ infixr 2 ||
 -- |Trinary AND
 (∧) :: Input Bool -> Input Bool -> Input Bool
 (∧) = liftM2 $ \a b -> case (a, b) of
-  (Nothing, _)             -> Nothing
-  (_, Nothing)             -> Nothing
+  (Just False, _)          -> Just False
+  (_, Just False)          -> Just False
   (Just True, Just True)   -> Just True
-  _                        -> Just False
+  _                        -> Just Nothing
 
 -- |Trinary OR
 (∨) :: Input Bool -> Input Bool -> Input Bool
