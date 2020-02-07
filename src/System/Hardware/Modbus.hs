@@ -9,6 +9,7 @@ module System.Hardware.Modbus
   , runMaster
   , readInputBits
   , writeBit
+  , writeRegister
   , waitFailure
   ) where
 
@@ -16,6 +17,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (catch, throw)
 import Control.Monad (forever, when)
+import Data.Word
 import System.Hardware.Modbus.Types
 import qualified System.Hardware.Modbus.LowLevel as B
 
@@ -93,6 +95,20 @@ writeBit Master{..} slave addr status = do
     { operation = do
         B.setSlave handle slave
         B.writeBit handle addr status
+        atomically $ writeTVar var True
+    , exception = atomically . writeTVar var . throw
+    }
+  return $ readTVar var >>= check
+
+-- |Relay which is controlled via Modbus function code 0x05 (force
+-- single coil)
+writeRegister :: Master -> Int -> Int -> Control Word16
+writeRegister Master{..} slave addr value = do
+  var <- newTVar False
+  writeTQueue opQueue Operation
+    { operation = do
+        B.setSlave handle slave
+        B.writeRegister handle addr value
         atomically $ writeTVar var True
     , exception = atomically . writeTVar var . throw
     }
