@@ -13,8 +13,12 @@ import System.Hardware.Modbus.Abstractions
 import System.IO
 import System.Process
 import Media.Streaming.Vlc
+import System.Hardware.Modbus.Types (Control)
 
 import ActivityDetect
+
+write4chRelay :: Master -> Int -> Int -> Control Bool
+write4chRelay m s a v = writeRegister m s a (if v then 0x0100 else 0x0200)
 
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay
@@ -50,8 +54,8 @@ main = do
   -- Introduce variables for digital inputs
   [ swKerhoVasen,
     swKerhoOikea,
-    _,
-    _,
+    swAuki,
+    swPois,
     loadVideotykki,
     _,
     _,
@@ -82,6 +86,7 @@ main = do
   let kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
   let tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
   let pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaOikea
+  let swPaikalla  = (&&) <$> (not <$> swAuki) <*> (not <$> swPois)
 
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
@@ -105,6 +110,10 @@ main = do
   kerhoKuorma <- fst <$> loadSense swKerhoOikea loadKerhoRasia 500000
 
   pushButton hataSeis nop $ vlc "goto 3"
+
+  -- Ovien ohjaukset
+--  wire swAuki (write4chRelay master 3 1) -- Ulko-ovi
+  wire swAuki (write4chRelay master 3 2) -- Kerhon ovi
 
   -- Golffataan vähän monadeilla
   let valotJossakin = or <$> sequence [ swKerhoVasen
@@ -135,6 +144,9 @@ main = do
                ,("kerhotila-kuorma", kerhoKuorma)
                ,("työpaja-hätäseis", hataSeis)
                ,("maalaushuone-valot", readTVar maalausValot)
+               ,("tila-poissa", swPois)
+               ,("tila-paikalla", swPaikalla)
+               ,("tila-auki", swAuki)
                ,("powered", valotJossakin)
                ]
   forkIO $ runMonitor stdout q
