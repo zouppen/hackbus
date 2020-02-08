@@ -49,8 +49,6 @@ main = do
   -- Unifi motion
   (_, pajaMotion) <- activityDetect 120000000 "inotifywait -qmr --format x /mnt/jako/valvonta/a47395ea-4762-3e3c-9c9f-ede2780bcdaa -e create"
 
-  --let swKerhoOikea = return True
-  
   -- Introduce variables for digital inputs
   [ swKerhoVasen,
     swKerhoOikea,
@@ -81,12 +79,14 @@ main = do
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
+  overrideDoors       <- newTVarIO False
 
-  let kerhoSahkot = (||) <$> readTVar viiveKerhoSahkot <*> readTVar overrideKerhoSahkot
-  let kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
-  let tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
-  let pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaOikea
-  let swPaikalla  = (&&) <$> (not <$> swAuki) <*> (not <$> swPois)
+  let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
+      kerhoSahkot = (||) <$> readTVar viiveKerhoSahkot <*> readTVar overrideKerhoSahkot
+      kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
+      tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
+      pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaOikea
+      swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
 
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
@@ -111,9 +111,26 @@ main = do
 
   pushButton hataSeis nop $ vlc "goto 3"
 
-  -- Ovien ohjaukset
---  wire swAuki (write4chRelay master 3 1) -- Ulko-ovi
-  wire swAuki (write4chRelay master 3 2) -- Kerhon ovi
+  -- Door control
+  wire ovetAuki (write4chRelay master 3 1) -- Ulko-ovi
+  wire ovetAuki (write4chRelay master 3 2) -- Kerhon ovi
+
+  -- Door control stream
+  doorChan <- newTChanIO
+  forkIO $ forever $ do
+    -- Receive item, open the doors, and start delay
+    delay <- atomically $ do
+      writeTVar overrideDoors True
+      readTChan doorChan :: STM Int
+    delayVar <- registerDelay delay
+    -- If no opening commands are received in given timeout, close doors
+    atomically $ do
+      isEmpty <- isEmptyTChan doorChan
+      elapsed <- readTVar delayVar
+      case (isEmpty, elapsed) of
+        (False, _)   -> pure ()
+        (True, True) -> writeTVar overrideDoors False
+        _            -> retry
 
   -- Golffataan vähän monadeilla
   let valotJossakin = or <$> sequence [ swKerhoVasen
@@ -131,6 +148,7 @@ main = do
                    ,("maalaus-valot", readonly maalausValot)
                    ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
                    ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
+                   ,("ovet", action $ writeTChan doorChan)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
