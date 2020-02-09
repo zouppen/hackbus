@@ -10,6 +10,7 @@ module System.Hardware.Modbus
   , readInputBits
   , writeBit
   , writeRegister
+  , writeBitRegister
   , waitFailure
   ) where
 
@@ -101,10 +102,16 @@ readInputBits master slave addr nb = modbusQuery master slave $ \h -> B.readInpu
 writeBit :: Master -> Int -> Int -> Control Bool
 writeBit master slave addr status = modbusQuery master slave $ \h -> B.writeBit h addr status
 
--- |Relay which is controlled via Modbus function code 0x05 (force
--- single coil)
+-- |Write register using Modbus function code 0x06 (preset single
+-- register).
 writeRegister :: Master -> Int -> Int -> Control Word16
 writeRegister master slave addr value = modbusQuery master slave $ \h -> B.writeRegister h addr value
+
+-- |Relay which is controlled using 0x0100 for closed and 0x0200 open
+-- state via Modbus function code 0x06 (preset single
+-- register). Chinese stuff.
+writeBitRegister :: Master -> Int -> Int -> Control Bool
+writeBitRegister m s a v = writeRegister m s a (if v then 0x0100 else 0x0200)
 
 -- |Read statistics
 getStats :: Master -> STM Stats
