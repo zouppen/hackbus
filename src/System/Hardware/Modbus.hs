@@ -73,46 +73,38 @@ runMaster handle = do
     threadDelay 5000
   return Master{..}
 
-readInputBits :: Master -> Int -> Int -> Int -> Query [Bool]
-readInputBits Master{..} slave addr nb = do
-  var <- newEmptyTMVar
+-- |Generic Modbus interaction
+modbusInteract :: Master -> Int -> (B.ModbusHandle -> IO a) -> (a -> STM ()) -> STM ()
+modbusInteract Master{..} slave command action = do
   writeTQueue opQueue Operation
     { operation = do
         B.setSlave handle slave
-        out <- B.readInputBits handle addr nb
-        atomically $ putTMVar var out
-    , exception = atomically . (putTMVar var) . throw
+        out <- command handle
+        atomically $ action out
+    , exception = atomically . action . throw
     }
+
+-- |Current (legacy) way to collect data from Modbus command
+modbusQuery :: Master -> Int -> (B.ModbusHandle -> IO a) -> Query a
+modbusQuery master slave command = do
+  var <- newEmptyTMVar
+  modbusInteract master slave command (putTMVar var)
   return $ takeTMVar var
-  -- TODO add target function retry check. Should never block.
+
+-- |Read given number of bits from given address. Modbus function code
+-- 0x02 (read input status).
+readInputBits :: Master -> Int -> Int -> Int -> Query [Bool]
+readInputBits master slave addr nb = modbusQuery master slave $ \h -> B.readInputBits h addr nb
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
 -- single coil)
 writeBit :: Master -> Int -> Int -> Control Bool
-writeBit Master{..} slave addr status = do
-  var <- newTVar False
-  writeTQueue opQueue Operation
-    { operation = do
-        B.setSlave handle slave
-        B.writeBit handle addr status
-        atomically $ writeTVar var True
-    , exception = atomically . writeTVar var . throw
-    }
-  return $ readTVar var >>= check
+writeBit master slave addr status = modbusQuery master slave $ \h -> B.writeBit h addr status
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
 -- single coil)
 writeRegister :: Master -> Int -> Int -> Control Word16
-writeRegister Master{..} slave addr value = do
-  var <- newTVar False
-  writeTQueue opQueue Operation
-    { operation = do
-        B.setSlave handle slave
-        B.writeRegister handle addr value
-        atomically $ writeTVar var True
-    , exception = atomically . writeTVar var . throw
-    }
-  return $ readTVar var >>= check
+writeRegister master slave addr value = modbusQuery master slave $ \h -> B.writeRegister h addr value
 
 -- |Read statistics
 getStats :: Master -> STM Stats
