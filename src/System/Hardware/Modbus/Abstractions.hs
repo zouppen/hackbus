@@ -8,14 +8,13 @@ import Control.Monad.Loops (iterateM_)
 
 import System.Hardware.Modbus.Types
 
--- |Makes any output controllable via STM variable. State is refreshed
--- every given microseconds.
-wireWithRefresh :: Eq a => Int -> STM a -> Control a -> IO ThreadId
-wireWithRefresh timeout source control = forkIO $ flip iterateM_ (const False) $ \same -> do
-  wait <- readTVar <$> registerDelay timeout
+-- |Ordinary relay or other output. Makes any output controllable via
+-- STM variable.
+wire :: Eq a => STM a -> Control a -> IO ThreadId
+wire source control = forkIO $ flip iterateM_ (const False) $ \same -> do
   (state, cb) <- atomically $ do
     state <- source
-    when (same state) $ wait >>= check
+    when (same state) retry
     cb <- control state
     pure (state, cb)
   atomically cb
@@ -52,10 +51,6 @@ poll = pollWithInterval 100000
 -- register with only one read.
 pollMany :: Query [a] -> IO ([STM a], ThreadId)
 pollMany = pollManyWithInterval 100000
-
--- |Ordinary relay or other output. Refreshes state every 4 seconds.
-wire :: Eq a => STM a -> Control a -> IO ThreadId
-wire = wireWithRefresh 4000000
 
 -- |Generic button which runs IO action every time a button is
 -- pressed.
