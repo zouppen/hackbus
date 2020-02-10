@@ -85,27 +85,27 @@ modbusInteract Master{..} slave command action = do
     , exception = atomically . action . throw
     }
 
--- |Current (legacy) way to collect data from Modbus command
-modbusQuery :: Master -> Int -> (B.ModbusHandle -> IO a) -> Query a
-modbusQuery master slave command = do
-  var <- newEmptyTMVar
-  modbusInteract master slave command (putTMVar var)
-  return $ takeTMVar var
+-- |Modbus control command. Does not require return results.
+modbusControl :: Master -> Int -> Control (B.ModbusHandle -> IO ())
+modbusControl master slave command = do
+  var <- newTVar False
+  modbusInteract master slave command $ const $ writeTVar var True
+  return $ readTVar var >>= check
 
 -- |Read given number of bits from given address. Modbus function code
 -- 0x02 (read input status).
-readInputBits :: Master -> Int -> Int -> Int -> Query [Bool]
-readInputBits master slave addr nb = modbusQuery master slave $ \h -> B.readInputBits h addr nb
+readInputBits :: Master -> Int -> Int -> Int -> ([Bool] -> STM ()) -> STM ()
+readInputBits master slave addr nb act = modbusInteract master slave (\h -> B.readInputBits h addr nb) act
 
 -- |Relay which is controlled via Modbus function code 0x05 (force
 -- single coil)
 writeBit :: Master -> Int -> Int -> Control Bool
-writeBit master slave addr status = modbusQuery master slave $ \h -> B.writeBit h addr status
+writeBit master slave addr status = modbusControl master slave $ \h -> B.writeBit h addr status
 
 -- |Write register using Modbus function code 0x06 (preset single
 -- register).
 writeRegister :: Master -> Int -> Int -> Control Word16
-writeRegister master slave addr value = modbusQuery master slave $ \h -> B.writeRegister h addr value
+writeRegister master slave addr value = modbusControl master slave $ \h -> B.writeRegister h addr value
 
 -- |Relay which is controlled using 0x0100 for closed and 0x0200 open
 -- state via Modbus function code 0x06 (preset single
