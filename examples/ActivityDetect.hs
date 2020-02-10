@@ -23,6 +23,4 @@ activityDetect holdTime h = do
     atomically $ writeTVar var ret
   return $ readTVar var
 
-liftWithRetry :: STM (Maybe b) -> STM b
-liftWithRetry var = var >>= maybe retry pure
 
