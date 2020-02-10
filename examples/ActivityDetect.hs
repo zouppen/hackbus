@@ -22,6 +22,4 @@ activityDetect holdTime cmd = do
     atomically $ writeTVar var $ Just $ isJust a
   return (procH, readTVar var)
 
-liftWithRetry :: STM (Maybe b) -> STM b
-liftWithRetry var = var >>= maybe retry pure
 
