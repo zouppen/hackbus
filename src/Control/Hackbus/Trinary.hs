@@ -24,12 +24,12 @@ optional2 f a b = do
   _                        -> empty
 
 -- |Trinary OR
-(<||>) :: Maybe Bool -> Maybe Bool -> Maybe Bool
+(<||>) :: (Monad m, Alternative m) => m Bool -> m Bool -> m Bool
 (<||>) = optional2 $ \a b -> case (a, b) of
-  (Just True, _)           -> Just True
-  (_, Just True)           -> Just True
-  (Just False, Just False) -> Just False
-  _                        -> Nothing
+  (Just True, _)           -> pure True
+  (_, Just True)           -> pure True
+  (Just False, Just False) -> pure False
+  _                        -> empty
 
 -- |Trinary NOT
 fnot :: Functor f => f Bool -> f Bool
