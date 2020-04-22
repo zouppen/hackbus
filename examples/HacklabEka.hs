@@ -114,6 +114,7 @@ main = do
   -- Door control
   wire ovetAuki (write4chRelay master 3 1) -- Ulko-ovi
   wire ovetAuki (write4chRelay master 3 2) -- Kerhon ovi
+  wire ovetAuki (write4chRelay master 3 3) -- Varaston ovi
 
   -- Door control stream
   doorChan <- newTChanIO
@@ -149,6 +150,7 @@ main = do
                    ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
                    ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
                    ,("ovet", action $ writeTChan doorChan)
+                   ,("ovet_auki", readAction ovetAuki)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
@@ -166,6 +168,7 @@ main = do
                ,("tila-paikalla", swPaikalla)
                ,("tila-auki", swAuki)
                ,("powered", valotJossakin)
+               ,("ovet-auki", ovetAuki)
                ]
   forkIO $ runMonitor stdout q
 
