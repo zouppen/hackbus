@@ -5,6 +5,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Hackbus.Logging
 import Control.Hackbus.UnixJsonInterface
+import Control.Hackbus.UnixSocket (connectUnixSocket)
 import Control.Monad
 import Data.Map.Lazy (fromList)
 import System.Environment (getArgs)
@@ -47,7 +48,8 @@ main = do
   let vlc = vlcCmd vlcH
 
   -- Unifi motion
-  (_, pajaMotion) <- activityDetect 120000000 "inotifywait -qmr --format x /mnt/jako/valvonta/a47395ea-4762-3e3c-9c9f-ede2780bcdaa -e create"
+  motionH <- connectUnixSocket "/run/kvm/unifi/liiketunnistin"
+  pajaMotion <- activityDetect 120000000 motionH
 
   -- Introduce variables for digital inputs
   [ swKerhoVasen,

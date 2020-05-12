@@ -52,3 +52,9 @@ lineHandler act handle = forever $ do
   line <- B.fromStrict <$> B.hGetLine handle
   ans <- act line
   B.hPut handle $ ans `B.snoc` 10
+
+connectUnixSocket :: FilePath -> IO Handle
+connectUnixSocket path = do
+  sock <- socket AF_UNIX Stream defaultProtocol
+  connect sock $ SockAddrUnix path
+  socketToHandle sock ReadWriteMode
