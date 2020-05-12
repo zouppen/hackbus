@@ -40,7 +40,7 @@ listenUnixSocket handler path = bracket open close loop
       -- Copy old socket file permissions after the socket has created
       -- but before starting to accept connections.
       maybe (pure ()) (copyPermissions path) mbStatus
-      listen sock 1024
+      listen sock 2
       return sock
     loop sock = forever $ do
       (conn, _) <- accept sock
