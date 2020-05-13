@@ -158,19 +158,19 @@ main = do
 
   -- Start some monitors
   q <- newMonitorQueue
-  addWatches q [("kerhotila-valot", swKerhoVasen)
-               ,("kerhotila-sähköt-katkasin", swKerhoOikea)
-               ,("kerhotila-sähköt", readTVar viiveKerhoSahkot)
-               ,("työpaja-valot", swPajaVasen)
-               ,("työpaja-sähköt", swPajaOikea)
-               ,("kerhotila-kuorma", kerhoKuorma)
-               ,("työpaja-hätäseis", hataSeis)
-               ,("maalaushuone-valot", readTVar maalausValot)
-               ,("tila-poissa", swPois)
-               ,("tila-paikalla", swPaikalla)
-               ,("tila-auki", swAuki)
-               ,("powered", valotJossakin)
-               ,("ovet-auki", ovetAuki)
+  addWatches q [jf "kerhotila-valot" swKerhoVasen
+               ,jf "kerhotila-sähköt-katkasin" swKerhoOikea
+               ,jf "kerhotila-sähköt" $ readTVar viiveKerhoSahkot
+               ,jf "työpaja-valot" swPajaVasen
+               ,jf "työpaja-sähköt" swPajaOikea
+               ,jf "kerhotila-kuorma" kerhoKuorma
+               ,jf "työpaja-hätäseis" hataSeis
+               ,jf "maalaushuone-valot" $ readTVar maalausValot
+               ,jf "tila-poissa" swPois
+               ,jf "tila-paikalla" swPaikalla
+               ,jf "tila-auki" swAuki
+               ,jf "powered" valotJossakin
+               ,jf "ovet-auki" ovetAuki
                ]
   forkIO $ runMonitor stdout q
 

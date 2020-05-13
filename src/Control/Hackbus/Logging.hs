@@ -12,11 +12,8 @@ import Data.Text (Text)
 import Control.Hackbus.JsonCommands
 
 -- |Watch named STM variables for changes
-addWatches :: (Traversable t, Eq a, ToJSON a)
-           => TQueue B.ByteString
-           -> t (Text, STM a)
-           -> IO (t ThreadId)
-addWatches q = mapM (forkIO . watch (writeTQueue q . jsonFormat))
+addWatches :: Traversable t => a -> t (a -> IO ()) -> IO (t ThreadId)
+addWatches q = mapM $ \f -> forkIO $ f q
 
 -- |Stop running watches
 stopWatches :: Traversable t => t ThreadId -> IO ()
@@ -33,9 +30,13 @@ watch enq (key,source) = do
     writeTVar oldVar new
     enq (key,new)
 
--- |JSON formatter
+-- |JSON report formatter
 jsonFormat :: ToJSON a => (Text, a) -> B.ByteString
 jsonFormat (k,v) = encode $ Report k $ toJSON v
+
+-- |Shorthand for adding elements of any type to the queue
+jf :: (Eq a, ToJSON a) => Text -> STM a -> TQueue B.ByteString -> IO ()
+jf k v q = watch (writeTQueue q . jsonFormat) (k,v)
 
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue B.ByteString)
