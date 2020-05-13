@@ -6,6 +6,7 @@ import Control.Concurrent.STM
 import Control.Hackbus.Logging
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket)
+import Control.Hackbus.AlarmSystem
 import Control.Monad
 import Data.Map.Lazy (fromList)
 import System.Environment (getArgs)
@@ -121,12 +122,21 @@ main = do
   wire ovetAuki (write4chRelay master 3 2) -- Kerhon ovi
   wire ovetAuki (write4chRelay master 3 3) -- Varaston ovi
 
+  -- Initial state of alarm is the state of "home" switch
+  lockFlagVar <- newTVarIO False
+  armState <- do
+    paikalla <- atomically swPaikalla
+    -- This simple until we can store states
+    newTVarIO $ if paikalla then Unarmed else Armed
+  forkIO $ runAlarmSystem $ AlarmSystem 30000000 swPaikalla lockFlagVar armState
+
   -- Door control stream
   doorChan <- newTChanIO
   forkIO $ forever $ do
     -- Receive item, open the doors, and start delay
     delay <- atomically $ do
       writeTVar overrideDoors True
+      writeTVar lockFlagVar True -- Signal the alarm system as well
       readTChan doorChan :: STM Int
     delayVar <- registerDelay delay
     -- If no opening commands are received in given timeout, close doors
@@ -157,6 +167,7 @@ main = do
                    ,("ovet", action $ writeTChan doorChan)
                    ,("in_charge", readwrite inCharge)
                    ,("ovet_auki", readAction ovetAuki)
+                   ,("arm_state", readonly armState)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
@@ -176,6 +187,7 @@ main = do
                ,jf "powered" valotJossakin
                ,jf "ovet-auki" ovetAuki
                ,jf "in_charge" $ readTVar inCharge
+               ,jf "arm_state" $ readTVar armState
                ]
   forkIO $ runMonitor stdout q
 
