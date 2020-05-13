@@ -90,6 +90,9 @@ main = do
       pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaOikea
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
 
+  -- Other info
+  inCharge <- newTVarIO (Nothing :: Maybe String)
+  
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
@@ -152,6 +155,7 @@ main = do
                    ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
                    ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
                    ,("ovet", action $ writeTChan doorChan)
+                   ,("in_charge", readwrite inCharge)
                    ,("ovet_auki", readAction ovetAuki)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
@@ -171,6 +175,7 @@ main = do
                ,jf "tila-auki" swAuki
                ,jf "powered" valotJossakin
                ,jf "ovet-auki" ovetAuki
+               ,jf "in_charge" $ readTVar inCharge
                ]
   forkIO $ runMonitor stdout q
 
