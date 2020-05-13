@@ -1,13 +1,15 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, DeriveGeneric #-}
 module Control.Hackbus.AlarmSystem (ArmedState(..), AlarmSystem(..), runAlarmSystem) where
 
 import Control.Concurrent.STM
+import Data.Aeson
+import GHC.Generics
 
 data ArmedState = Unarmed   -- ^No alarms should trigger
                 | Arming    -- ^No alarms should trigger (yet)
                 | Armed     -- ^Alarms should trigger
                 | Uncertain -- ^Alarms should be held for triggering if the next state is Armed
-                deriving (Eq, Show)
+                deriving (Eq, Show, Generic)
 
 data AlarmSystem = AlarmSystem
   { delay    :: Int             -- ^Delay in microseconds for arrival and leave
@@ -15,6 +17,9 @@ data AlarmSystem = AlarmSystem
   , lockFlag :: TVar Bool       -- ^Flag for unlock event
   , armState :: TVar ArmedState -- ^Resulting state if alarm is on currently
   }
+
+instance ToJSON ArmedState where
+    toEncoding = genericToEncoding defaultOptions
 
 -- |When alarm is on.
 armed AlarmSystem{..} = atomically $ do
