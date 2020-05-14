@@ -19,9 +19,6 @@ import System.Hardware.Modbus.Types (Control)
 
 import ActivityDetect
 
-write4chRelay :: Master -> Int -> Int -> Control Bool
-write4chRelay m s a v = writeRegister m s a (if v then 0x0100 else 0x0200)
-
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay
   waitAct
@@ -118,9 +115,9 @@ main = do
   pushButton hataSeis nop $ vlc "goto 3"
 
   -- Door control
-  wire ovetAuki (write4chRelay master 3 1) -- Ulko-ovi
-  wire ovetAuki (write4chRelay master 3 2) -- Kerhon ovi
-  wire ovetAuki (write4chRelay master 3 3) -- Varaston ovi
+  wire ovetAuki (writeBitRegister master 3 1) -- Ulko-ovi
+  wire ovetAuki (writeBitRegister master 3 2) -- Kerhon ovi
+  wire ovetAuki (writeBitRegister master 3 3) -- Varaston ovi
 
   -- Initial state of alarm is the state of "home" switch
   lockFlagVar <- newTVarIO False
