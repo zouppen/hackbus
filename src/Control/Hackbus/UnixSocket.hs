@@ -2,16 +2,16 @@
 module Control.Hackbus.UnixSocket where
 
 import Control.Concurrent (forkFinally)
-import Control.Exception (bracket)
+import Control.Exception (bracket, finally)
 import Control.Monad (when, forever)
-import qualified Data.ByteString as B (hGetLine)
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Network.Socket
 import System.IO (Handle, IOMode(..), hClose)
 import System.Posix.Files
 import System.Directory (doesFileExist)
 
-type LineAction = B.ByteString -> IO B.ByteString 
+type LineAction = BL.ByteString -> IO BL.ByteString 
 
 -- |Copies file mode and ownership from another file.
 copyPermissions :: FilePath -> FileStatus -> IO ()
@@ -30,6 +30,7 @@ clearDanglingSocket path = do
               else fail "Socket path is a file"
     else pure Nothing
 
+-- |Listen to new UNIX socket and fork a new thread per connection.
 listenUnixSocket :: (Handle -> IO ()) -> FilePath -> IO ()
 listenUnixSocket handler path = bracket open close loop
   where
@@ -47,14 +48,18 @@ listenUnixSocket handler path = bracket open close loop
       h <- socketToHandle conn ReadWriteMode
       forkFinally (handler h) $ const $ hClose h
 
+-- |Single line chat. Per one incoming line there is always one
+-- response line.
 lineHandler :: LineAction -> Handle -> IO ()
 lineHandler act handle = forever $ do
-  line <- B.fromStrict <$> B.hGetLine handle
+  line <- BL.fromStrict <$> BS.hGetLine handle
   ans <- act line
-  B.hPut handle $ ans `B.snoc` 10
+  BL.hPut handle $ ans `BL.snoc` 10
 
-connectUnixSocket :: FilePath -> IO Handle
-connectUnixSocket path = do
+-- |Connect to pre-existing UNIX socket and process input with a function.
+connectUnixSocket :: (Handle -> IO ()) -> String -> IO ()
+connectUnixSocket handler path = do
   sock <- socket AF_UNIX Stream defaultProtocol
   connect sock $ SockAddrUnix path
-  socketToHandle sock ReadWriteMode
+  h <- socketToHandle sock ReadWriteMode
+  finally (handler h) (hClose h)
