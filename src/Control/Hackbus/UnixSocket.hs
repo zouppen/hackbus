@@ -10,6 +10,7 @@ import Network.Socket
 import System.IO (Handle, IOMode(..), hClose)
 import System.Posix.Files
 import System.Directory (doesFileExist)
+import System.Timeout (timeout)
 
 type LineAction = BL.ByteString -> IO BL.ByteString 
 
@@ -55,6 +56,15 @@ lineHandler act handle = forever $ do
   line <- BL.fromStrict <$> BS.hGetLine handle
   ans <- act line
   BL.hPut handle $ ans `BL.snoc` 10
+
+-- |Read data infinitely and never write. When data arrives, notify
+-- function is called with True. If data flow stops for a given time,
+-- notify function is called with False.
+activityDetect holdTime notify h = forever $ do
+  a <- timeout holdTime $ BS.hGetSome h 1024
+  notify $ case a of
+    Just a -> if BS.null a then error "Socket disappeared" else True
+    Nothing -> False
 
 -- |Connect to pre-existing UNIX socket and process input with a function.
 connectUnixSocket :: (Handle -> IO ()) -> String -> IO ()
