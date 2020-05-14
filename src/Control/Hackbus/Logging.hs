@@ -19,24 +19,28 @@ addWatches q = mapM $ \f -> forkIO $ f q
 stopWatches :: Traversable t => t ThreadId -> IO ()
 stopWatches = mapM_ killThread
 
--- |Watch changes in a given STM variable
-watch :: Eq v => ((k, v) -> STM ()) -> (k, STM v) -> IO ()
-watch enq (key,source) = do
+-- |Watch changes in a given STM variable. When value changes, run
+-- given action.
+watch :: Eq v => STM v -> STM () -> IO ()
+watch source notify = do
   oldVar <- atomically $ source >>= newTVar 
   forever $ atomically $ do
     new <- source
     old <- readTVar oldVar
     when (old == new) retry
     writeTVar oldVar new
-    enq (key,new)
+    notify
 
 -- |JSON report formatter
-jsonFormat :: ToJSON a => (Text, a) -> B.ByteString
-jsonFormat (k,v) = encode $ Report k $ toJSON v
+jsonReport :: ToJSON a => Text -> a -> B.ByteString
+jsonReport k v = encode $ Report k $ toJSON v
 
--- |Shorthand for adding elements of any type to the queue
-jf :: (Eq a, ToJSON a) => Text -> STM a -> TQueue B.ByteString -> IO ()
-jf k v q = watch (writeTQueue q . jsonFormat) (k,v)
+-- |Add element to queue with a key and a single value which is
+-- printed only when it changes.
+kv :: (Eq a, ToJSON a) => Text -> STM a -> TQueue B.ByteString -> IO ()
+kv k v q = watch v $ do
+  v' <- v
+  writeTQueue q $ jsonReport k v'
 
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue B.ByteString)

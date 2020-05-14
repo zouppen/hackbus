@@ -174,21 +174,21 @@ main = do
 
   -- Start some monitors
   q <- newMonitorQueue
-  addWatches q [jf "kerhotila-valot" swKerhoVasen
-               ,jf "kerhotila-sähköt-katkasin" swKerhoOikea
-               ,jf "kerhotila-sähköt" $ readTVar viiveKerhoSahkot
-               ,jf "työpaja-valot" swPajaVasen
-               ,jf "työpaja-sähköt" swPajaOikea
-               ,jf "kerhotila-kuorma" kerhoKuorma
-               ,jf "työpaja-hätäseis" hataSeis
-               ,jf "maalaushuone-valot" $ readTVar maalausValot
-               ,jf "tila-poissa" swPois
-               ,jf "tila-paikalla" swPaikalla
-               ,jf "tila-auki" swAuki
-               ,jf "powered" valotJossakin
-               ,jf "ovet-auki" ovetAuki
-               ,jf "in_charge" $ readTVar inCharge
-               ,jf "arm_state" $ readTVar armState
+  addWatches q [kv "kerhotila-valot" swKerhoVasen
+               ,kv "kerhotila-sähköt-katkasin" swKerhoOikea
+               ,kv "kerhotila-sähköt" $ readTVar viiveKerhoSahkot
+               ,kv "työpaja-valot" swPajaVasen
+               ,kv "työpaja-sähköt" swPajaOikea
+               ,kv "kerhotila-kuorma" kerhoKuorma
+               ,kv "työpaja-hätäseis" hataSeis
+               ,kv "maalaushuone-valot" $ readTVar maalausValot
+               ,kv "tila-poissa" swPois
+               ,kv "tila-paikalla" swPaikalla
+               ,kv "tila-auki" swAuki
+               ,kv "powered" valotJossakin
+               ,kv "ovet-auki" ovetAuki
+               ,kv "in_charge" $ readTVar inCharge
+               ,kv "arm_state" $ readTVar armState
                ]
   forkIO $ runMonitor stdout q
 
