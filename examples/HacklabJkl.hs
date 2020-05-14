@@ -5,7 +5,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Hackbus.Logging
 import Control.Hackbus.UnixJsonInterface
-import Control.Hackbus.UnixSocket (connectUnixSocket)
+import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Hackbus.AlarmSystem
 import Control.Monad
 import Data.Map.Lazy (fromList)
@@ -17,7 +17,12 @@ import System.Process
 import Media.Streaming.Vlc
 import System.Hardware.Modbus.Types (Control)
 
-import ActivityDetect
+runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, STM (Maybe Bool))
+runListenUnixSocketActivity triggerDelay path = do
+  var <- newTVarIO Nothing
+  let handler = activityDetect triggerDelay (atomically . writeTVar var . Just)
+  tid <- forkIO $ connectUnixSocket handler path
+  return (tid, readTVar var)
 
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay
@@ -46,8 +51,7 @@ main = do
   let vlc = vlcCmd vlcH
 
   -- Unifi motion
-  motionH <- connectUnixSocket "/run/kvm/unifi/liiketunnistin"
-  pajaMotion <- activityDetect 120000000 motionH
+  (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
 
   -- Introduce variables for digital inputs
   [ swKerhoVasen,

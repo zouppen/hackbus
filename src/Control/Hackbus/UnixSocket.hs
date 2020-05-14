@@ -58,10 +58,10 @@ lineHandler act handle = forever $ do
   BL.hPut handle $ ans `BL.snoc` 10
 
 -- |Read data infinitely and never write. When data arrives, notify
--- function is called with True. If data flow stops for a given time,
--- notify function is called with False.
-activityDetect holdTime notify h = forever $ do
-  a <- timeout holdTime $ BS.hGetSome h 1024
+-- function is called with True. If data flow stops for a given time
+-- in microseconds, notify function is called with False.
+activityDetect triggerDelay notify h = forever $ do
+  a <- timeout triggerDelay $ BS.hGetSome h 1024
   notify $ case a of
     Just a -> if BS.null a then error "Socket disappeared" else True
     Nothing -> False
