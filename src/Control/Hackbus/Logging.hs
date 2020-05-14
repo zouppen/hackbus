@@ -42,6 +42,14 @@ kv k v q = watch v $ do
   v' <- v
   writeTQueue q $ jsonReport k v'
 
+-- |Add element to queue with a key and a value v1 which is printed
+-- only if it changes. While printing, it is printed with value of v2.
+kvv :: (Eq a, ToJSON a, ToJSON b) => Text -> STM a -> STM b -> TQueue B.ByteString -> IO ()
+kvv k v1 v2 q = watch v1 $ do
+  v1' <- v1
+  v2' <- v2
+  writeTQueue q $ jsonReport k (v1',v2')
+
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue B.ByteString)
 newMonitorQueue = newTQueueIO

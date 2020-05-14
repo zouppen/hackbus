@@ -125,11 +125,11 @@ main = do
 
   -- Initial state of alarm is the state of "home" switch
   lockFlagVar <- newTVarIO False
-  armState <- do
+  armingState <- do
     paikalla <- atomically swPaikalla
     -- This simple until we can store states
     newTVarIO $ if paikalla then Unarmed else Armed
-  forkIO $ runAlarmSystem $ AlarmSystem 30000000 swPaikalla lockFlagVar armState
+  forkIO $ runAlarmSystem $ AlarmSystem 30000000 swPaikalla lockFlagVar armingState
 
   -- Door control stream
   doorChan <- newTChanIO
@@ -168,7 +168,7 @@ main = do
                    ,("ovet", action $ writeTChan doorChan)
                    ,("in_charge", readwrite inCharge)
                    ,("ovet_auki", readAction ovetAuki)
-                   ,("arm_state", readonly armState)
+                   ,("arming_state", readonly armingState)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
@@ -188,7 +188,7 @@ main = do
                ,kv "powered" valotJossakin
                ,kv "ovet-auki" ovetAuki
                ,kv "in_charge" $ readTVar inCharge
-               ,kv "arm_state" $ readTVar armState
+               ,kvv "arming_state" (readTVar armingState) (readTVar inCharge)
                ]
   forkIO $ runMonitor stdout q
 
