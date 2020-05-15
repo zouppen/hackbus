@@ -106,8 +106,3 @@ loadSense switch sense delay = do
       when (a /= b) retry       -- Load must match switch state
       writeTVar var False       -- We have recovered
   return (readTVar var, tid)
-
--- |Extract STM value from a Maybe type, retrying if Nothing (data not
--- yet available).
-liftWithRetry :: STM (Maybe b) -> STM b
-liftWithRetry = (>>= maybe retry pure)

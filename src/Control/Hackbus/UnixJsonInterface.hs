@@ -109,5 +109,5 @@ readAction f = Access (Just (readUnsafe' f)) Nothing
 
 -- |Read Readable type but retry if Nothing (data not yet
 -- available). Note this won't empty TMVars, just peeks them.
-peekWithRetry' :: Readable a => a b -> STM b
-peekWithRetry' a = peek a >>= maybe retry pure
+peekWithRetry :: Readable a => a b -> STM b
+peekWithRetry a = peek a >>= maybe retry pure

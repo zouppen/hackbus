@@ -17,12 +17,12 @@ import System.Process
 import Media.Streaming.Vlc
 import System.Hardware.Modbus.Types (Control)
 
-runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, STM (Maybe Bool))
+runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, TReadable Bool)
 runListenUnixSocketActivity triggerDelay path = do
   var <- newTVarIO Nothing
   let handler = activityDetect triggerDelay (atomically . writeTVar var . Just)
   tid <- forkIO $ connectUnixSocket handler path
-  return (tid, readTVar var)
+  return (tid, TReadable var)
 
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay
@@ -89,7 +89,7 @@ main = do
       kerhoSahkot = (||) <$> readTVar viiveKerhoSahkot <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
-      pajaValot   = (||) <$> liftWithRetry pajaMotion <*> swPajaOikea
+      pajaValot   = (||) <$> peekWithRetry pajaMotion <*> swPajaOikea
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
 
   -- Other info
@@ -188,7 +188,7 @@ main = do
                ,kv "powered" valotJossakin
                ,kv "ovet-auki" ovetAuki
                ,kv "in_charge" $ readTVar inCharge
-               ,kvv "arming_state" (readTVar armingState) (readTVar inCharge)
+               ,kvv "arming_state" armingState [read' inCharge]
                ]
   forkIO $ runMonitor stdout q
 

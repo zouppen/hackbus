@@ -6,10 +6,11 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TQueue
 import System.IO
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.Aeson (ToJSON, toJSON, encode)
+import Data.Aeson (Value, ToJSON, toJSON, encode)
 import Data.Text (Text)
 
 import Control.Hackbus.JsonCommands
+import Control.Hackbus.UnixJsonInterface
 
 -- |Watch named STM variables for changes
 addWatches :: Traversable t => a -> t (a -> IO ()) -> IO (t ThreadId)
@@ -58,13 +59,14 @@ kv k v q = watch v $ do
   v' <- v
   writeTQueue q $ jsonReport k v'
 
--- |Add element to queue with a key and a value v1 which is printed
--- only if it changes. While printing, it is printed with value of v2.
-kvv :: (Eq a, ToJSON a, ToJSON b) => Text -> STM a -> STM b -> TQueue B.ByteString -> IO ()
-kvv k v1 v2 q = watch v1 $ do
-  v1' <- v1
-  v2' <- v2
-  writeTQueue q $ jsonReport k (v1',v2')
+-- |Add element to watch queue with a key and a value v which is
+-- monitored for changes. When value stored in v changes, then it is
+-- printed in addition to givon other values.
+kvv :: (Readable a, Eq b, ToJSON b) => Text -> a b -> [STM Value] -> TQueue B.ByteString -> IO ()
+kvv k v vs q = watch (peek v) $ do
+  v'   <- read' v
+  vs' <- sequence vs
+  writeTQueue q $ jsonReport k (v':vs')
 
 -- |Just a mnemonic for creating a new queue
 newMonitorQueue :: IO (TQueue B.ByteString)
