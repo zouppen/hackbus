@@ -9,7 +9,8 @@ import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Hackbus.AlarmSystem
 import Control.Monad
 import Data.Map.Lazy (fromList)
-import Data.Time.Clock.POSIX
+import System.Posix.Time (epochTime)
+import System.Posix.Types (EpochTime)
 import System.Environment (getArgs)
 import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
@@ -37,11 +38,11 @@ delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
       _             -> retry              -- Muuten odotellaan
 
 -- |Track for the time when a certain state change has taken place
-forkStateStartTimeRecorder :: Eq a => STM a -> a -> IO (ThreadId, TReadable POSIXTime)
+forkStateStartTimeRecorder :: Eq a => STM a -> a -> IO (ThreadId, TReadable EpochTime)
 forkStateStartTimeRecorder source state = do
   timeVar <- newTVarIO Nothing
   tid <- forkIO $ watchWith source comparator $ pure $ do
-    time <- getPOSIXTime
+    time <- epochTime
     atomically $ writeTVar timeVar $ Just time
   return (tid, TReadable timeVar)
   where comparator old new = old /= new && new == state
