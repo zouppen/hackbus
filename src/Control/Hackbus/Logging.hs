@@ -29,24 +29,25 @@ noIO :: HybridAction
 noIO = pure $ pure ()
 
 -- |Watch changes in a given STM variable. Watch is triggered every
--- time when the comparator returns True. When triggering, it runs
--- given hybrid action (both STM and IO actions).
-watchWith :: STM a -> (a -> a -> Bool) -> HybridAction -> IO ()
-watchWith source comparator notify = do
+-- time when value changes. Notify function is a hybrid action (has
+-- both STM and IO actions). NB! Notify functions are not allowed to
+-- retry to avoid stupid programming decisions.
+watchWithIO :: Eq a => STM a -> HybridAction -> IO ()
+watchWithIO source notify = do
   oldVar <- atomically $ source >>= newTVar 
   forever $ do
     ioPart <- atomically $ do
       new <- source
       old <- readTVar oldVar
-      unless (old `comparator` new) retry
+      when (old == new) retry
       writeTVar oldVar new
-      notify
+      notify `orElse` error "Your watchWithIO notify function retried."
     ioPart
 
 -- |Watch changes in a given STM variable. When value changes, run
 -- given action. For a more generic version, see `watchWith`.
 watch :: Eq v => STM v -> STM () -> IO ()
-watch source notify = watchWith source (/=) (notify >> noIO)
+watch source notify = watchWithIO source (notify >> noIO)
 
 -- |JSON report formatter
 jsonReport :: ToJSON a => Text -> a -> B.ByteString

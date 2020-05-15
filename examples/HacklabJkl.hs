@@ -41,11 +41,15 @@ delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
 forkStateStartTimeRecorder :: Eq a => STM a -> a -> IO (ThreadId, TReadable EpochTime)
 forkStateStartTimeRecorder source state = do
   timeVar <- newTVarIO Nothing
-  tid <- forkIO $ watchWith source comparator $ pure $ do
-    time <- epochTime
-    atomically $ writeTVar timeVar $ Just time
+  tid <- forkIO $ watchWithIO source $ do
+    -- No retrying is allowed (nor wise) so making the decision in STM
+    -- monad but doing the action in IO.
+    x <- source
+    pure $ if (x == state)
+      then do time <- epochTime
+              atomically $ writeTVar timeVar $ Just time
+      else pure ()
   return (tid, TReadable timeVar)
-  where comparator old new = old /= new && new == state
 
 main = do
   -- Minimal command line parsing
