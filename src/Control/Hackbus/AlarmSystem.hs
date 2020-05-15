@@ -12,7 +12,7 @@ data ArmedState = Unarmed   -- ^No alarms should trigger
                 deriving (Eq, Show, Generic)
 
 data AlarmSystem = AlarmSystem
-  { delay    :: Int             -- ^Delay in microseconds for arrival and leave
+  { delay    :: Int             -- ^Delay in µs for arrival and leave
   , atHome   :: STM Bool        -- ^State of "at home" switch
   , lockFlag :: TVar Bool       -- ^Flag for unlock event
   , armState :: TVar ArmedState -- ^Resulting state if alarm is on currently

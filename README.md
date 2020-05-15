@@ -1,15 +1,19 @@
 # HackBus
 
-Transactional memory bridge to Modbus RTU. Expandable to other buses such as DMX.
+Transactional memory bridge to Modbus RTU. Expandable to other buses
+such as DMX.
 
-Uses Haskell Software Transactional Memory to translate imperative nature of field buses to declarative definition.
+Uses Haskell Software Transactional Memory to translate imperative
+nature of field buses to declarative definition.
 
-Still work in progress, but used in daily basis at Hacklab Jyväskylä club room for controlling lighting and power sockets.
+Still work in progress, but used in daily basis at Hacklab Jyväskylä
+club room for controlling the alarm system, lighting, and power
+sockets.
 
 ## Installation
 
-If you have Debian or Ubuntu, I recommend installing all dependencies
-from their repositories to minimize package clutter.
+If you have Debian or Ubuntu, I'd recommend installing all
+dependencies from their repositories to minimize package clutter.
 
 ```
 sudo apt install \
@@ -37,7 +41,7 @@ There is interactive GHCi shell available for testing and setting
 module parameters such as addresses. Tab completion works in both
 device file entry and in the shell.
 
-Before it works, the cabal package needs to be installed, of course
+Before it works, the cabal package needs to be installed, of course.
 
 Example:
 
