@@ -19,17 +19,33 @@ addWatches q = mapM $ \f -> forkIO $ f q
 stopWatches :: Traversable t => t ThreadId -> IO ()
 stopWatches = mapM_ killThread
 
--- |Watch changes in a given STM variable. When value changes, run
--- given action.
-watch :: Eq v => STM v -> STM () -> IO ()
-watch source notify = do
+-- |Action in which STM action is run first and it may return IO
+-- action which is run soon after the transaction.
+type HybridAction = STM (IO ())
+
+-- |No IO action is performed
+noIO :: HybridAction
+noIO = pure $ pure ()
+
+-- |Watch changes in a given STM variable. Compares it with old value
+-- and when it changes, stores new value as old and runs given hybrid
+-- action (STM and IO actions).
+watchWith :: STM a -> (a -> a -> Bool) -> HybridAction -> IO ()
+watchWith source comparator notify = do
   oldVar <- atomically $ source >>= newTVar 
-  forever $ atomically $ do
-    new <- source
-    old <- readTVar oldVar
-    when (old == new) retry
-    writeTVar oldVar new
-    notify
+  forever $ do
+    ioPart <- atomically $ do
+      new <- source
+      old <- readTVar oldVar
+      when (old `comparator` new) retry
+      writeTVar oldVar new
+      notify
+    ioPart
+
+-- |Watch changes in a given STM variable. When value changes, run
+-- given action. For a more generic version, see `watchWith`.
+watch :: Eq v => STM v -> STM () -> IO ()
+watch source notify = watchWith source (==) (notify >> noIO)
 
 -- |JSON report formatter
 jsonReport :: ToJSON a => Text -> a -> B.ByteString
