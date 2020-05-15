@@ -9,6 +9,7 @@ import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Hackbus.AlarmSystem
 import Control.Monad
 import Data.Map.Lazy (fromList)
+import Data.Time.Clock.POSIX
 import System.Environment (getArgs)
 import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
@@ -34,6 +35,16 @@ delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
       (True, False) -> return offAct      -- Viive kulunut, katkaisin yhä alhaalla
       (_, True)     -> return $ return () -- Katkaisin ylhäällä, peruuta
       _             -> retry              -- Muuten odotellaan
+
+-- |Track for the time when a certain state change has taken place
+forkStateStartTimeRecorder :: Eq a => STM a -> a -> IO (ThreadId, TReadable POSIXTime)
+forkStateStartTimeRecorder source state = do
+  timeVar <- newTVarIO Nothing
+  tid <- forkIO $ watchWith source comparator $ pure $ do
+    time <- getPOSIXTime
+    atomically $ writeTVar timeVar $ Just time
+  return (tid, TReadable timeVar)
+  where comparator old new = old /= new && new == state
 
 main = do
   -- Minimal command line parsing
@@ -130,6 +141,7 @@ main = do
     -- This simple until we can store states
     newTVarIO $ if paikalla then Unarmed else Armed
   forkIO $ runAlarmSystem $ AlarmSystem 30000000 swPaikalla lockFlagVar armingState
+  (_, lastUnarmed) <- forkStateStartTimeRecorder (readTVar armingState) Unarmed
 
   -- Door control stream
   doorChan <- newTChanIO
@@ -188,7 +200,7 @@ main = do
                ,kv "powered" valotJossakin
                ,kv "ovet-auki" ovetAuki
                ,kv "in_charge" $ readTVar inCharge
-               ,kvv "arming_state" armingState [read' inCharge]
+               ,kvv "arming_state" armingState [read' inCharge, read' lastUnarmed]
                ]
   forkIO $ runMonitor stdout q
 
