@@ -12,6 +12,7 @@ module Control.Hackbus.Modules.HfEasy (HfEasy(..), runHfEasyRelay) where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception (handle)
 import Control.Monad
 import Control.Monad.Loops (iterateM_)
 import Data.Aeson.Types
@@ -63,11 +64,14 @@ runHfEasyRelay baseUrl = do
   -- Loop, start by reading.
   tId <- forkIO $ flip iterateM_ Nothing $ \command -> do
     -- Run the command, either read or write
-    state <- case command of
-      Nothing    -> readRelay baseUrl
-      Just state -> setRelay baseUrl state
-    atomically $ writeTVar stateVar $ Just state
+    handle ignoreCurlError $ do
+      state <- case command of
+        Nothing    -> readRelay baseUrl
+        Just state -> setRelay baseUrl state
+      atomically $ writeTVar stateVar $ Just state
     -- Now waiting for control change. Refreshing the relay state
     -- periodically defined by the delay.
     waitChange 2000000 command $ readTVar commandVar
   return $ HfEasy commandVar (TReadable stateVar) tId
+  where ignoreCurlError :: CurlAesonException -> IO ()
+        ignoreCurlError = const $ pure ()
