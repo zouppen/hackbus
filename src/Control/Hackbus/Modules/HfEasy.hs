@@ -64,14 +64,30 @@ runHfEasyRelay baseUrl = do
   -- Loop, start by reading.
   tId <- forkIO $ flip iterateM_ Nothing $ \command -> do
     -- Run the command, either read or write
-    handle ignoreCurlError $ do
-      state <- case command of
-        Nothing    -> readRelay baseUrl
-        Just state -> setRelay baseUrl state
-      atomically $ writeTVar stateVar $ Just state
-    -- Now waiting for control change. Refreshing the relay state
-    -- periodically defined by the delay.
-    waitChange 2000000 command $ readTVar commandVar
+    angry <- handle (curlErrorConst False) $ case command of
+      Nothing -> do
+        state <- readRelay baseUrl
+        atomically $ writeTVar stateVar $ Just state
+        pure False
+      Just targetState -> do
+        -- Set relay state and verify it after a delay
+        setRelay baseUrl targetState
+        threadDelay 300000
+        state <- readRelay baseUrl
+        -- Then decide what we need to do
+        atomically $ do
+          writeTVar stateVar $ Just state
+          -- We spent some time in IO operations so we need to recheck if the target has changed
+          freshCommand <- readTVar commandVar
+          if (freshCommand == Just state)
+            then do writeTVar commandVar Nothing -- Stop writing
+                    pure False -- All fine
+            else pure True -- Rewrite ASAP
+    -- Now waiting for control change.
+    (if angry then atomically else waitChange 2000000 command) (readTVar commandVar)
   return $ HfEasy commandVar (TReadable stateVar) tId
-  where ignoreCurlError :: CurlAesonException -> IO ()
-        ignoreCurlError = const $ pure ()
+
+-- |Error handler which just returns predefined value in case of an
+-- cURL exception.
+curlErrorConst :: a -> CurlAesonException -> IO a
+curlErrorConst = const . pure
