@@ -12,8 +12,10 @@ sockets.
 
 ## Installation
 
-If you have Debian or Ubuntu, I'd recommend installing all
+If you have Debian or Ubuntu, I'd recommend installing all available
 dependencies from their repositories to minimize package clutter.
+
+Then, only curl-aeson and hacbus itself are installed user-wide.
 
 ```
 sudo apt install \
@@ -23,9 +25,11 @@ sudo apt install \
 	libghc-aeson-dev \
 	libghc-network-dev \
 	libghc-readline-dev \
+	libghc-curl-dev \
+	libghc-utf8-string-dev \
 	libmodbus-dev
-cabal update
-cabal install
+cabal v1-update
+cabal v1-install
 ```
 
 On other systems with Cabal, run
