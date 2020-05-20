@@ -7,6 +7,7 @@ import Control.Hackbus.Logging
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Hackbus.AlarmSystem
+import Control.Hackbus.Modules.HfEasy
 import Control.Monad
 import Data.Map.Lazy (fromList)
 import System.Posix.Time (epochTime)
@@ -69,6 +70,9 @@ main = do
   -- Unifi motion
   (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
 
+  -- Netwjork SP5 in kitchen
+  netwjork <- runHfEasyRelay "http://10.0.6.32/state"
+
   -- Introduce variables for digital inputs
   [ swKerhoVasen,
     swKerhoOikea,
@@ -93,7 +97,7 @@ main = do
 
   delayOffSwitch swKerhoOikea 4000000
     (vlc "goto 4")
-    (atomically $ writeTVar viiveKerhoSahkot False)
+    (atomically $ writeTVar viiveKerhoSahkot False >> writeTVar (command netwjork) (Just False))
     (atomically (writeTVar viiveKerhoSahkot True) >> vlc "goto 5")
 
   -- Remote override
@@ -205,6 +209,7 @@ main = do
                ,kv "powered" valotJossakin
                ,kv "ovet-auki" ovetAuki
                ,kv "in_charge" $ readTVar inCharge
+               ,kv "keittio" $ peek $ state netwjork
                ,kvv "arming_state" armingState [read' inCharge, read' lastUnarmed]
                ]
   forkIO $ runMonitor stdout q
