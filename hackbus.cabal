@@ -16,15 +16,15 @@ source-repository head
 library
   hs-source-dirs:  src
   exposed-modules: System.Hardware.Modbus
-                 , System.Hardware.Modbus.Abstractions
-                 , System.Hardware.Modbus.LowLevel
-                 , System.Hardware.Modbus.Types
+                 , Control.Hackbus.AlarmSystem
+                 , Control.Hackbus.JsonCommands
                  , Control.Hackbus.Logging
                  , Control.Hackbus.UnixJsonInterface
                  , Control.Hackbus.UnixSocket
-                 , Control.Hackbus.JsonCommands
-                 , Control.Hackbus.AlarmSystem
                  , Media.Streaming.Vlc
+                 , System.Hardware.Modbus.Abstractions
+                 , System.Hardware.Modbus.LowLevel
+                 , System.Hardware.Modbus.Types
   cc-options:      -std=gnu99
   pkgconfig-depends: libmodbus
   build-depends:
