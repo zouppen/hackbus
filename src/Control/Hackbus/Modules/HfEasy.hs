@@ -16,6 +16,7 @@ import Control.Exception (handle)
 import Control.Monad
 import Control.Monad.Loops (iterateM_)
 import Data.Aeson.Types
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Network.Curl.Aeson
 import Network.Curl.Opts
@@ -45,14 +46,15 @@ setRelay baseUrl s = curlAeson relayStatus "GET" url opts noData
 
 -- |Returns the value in var. If the value returned in *act* is the
 -- same as in *old* wait for change to happen. Timeout is specified by
--- *delay*.
-waitChange :: Eq a => Int -> a -> STM a -> IO a
+-- *delay*. If action returns Nothing it means we are happy to wait
+-- the whole delay (it's read action).
+waitChange :: Eq a => Int -> Maybe a -> STM (Maybe a) -> IO (Maybe a)
 waitChange delay old act = do
   timeoutVar <- registerDelay delay
   atomically $ do
     hasTimeout <- readTVar timeoutVar
     new <- act
-    if hasTimeout || old /= new
+    if hasTimeout || (isJust new && old /= new)
       then pure new
       else retry
 
