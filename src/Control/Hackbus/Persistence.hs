@@ -1,7 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Control.Hackbus.Persistence where
 
-import qualified Data.Map.Lazy as M
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as M
 import Data.Text (Text, unpack)
 import Data.Aeson
 import Control.Concurrent
@@ -9,12 +10,12 @@ import Control.Concurrent.STM
 import System.Posix.Signals
 import Control.Monad
 
-data PersItem = File Value | Live (STM Encoding)
+data PersItem = File Value | Live (STM Value)
 
 data Persistence = Persistence
-  { store :: TVar (M.Map Text PersItem) -- ^Contains all persistent values
-  , file  :: FilePath                   -- ^File to store data to
-  , tId   :: ThreadId                   -- ^Thread ID
+  { store :: TVar (HashMap Text PersItem) -- ^Contains all persistent values
+  , file  :: FilePath                     -- ^File to store data to
+  , tId   :: ThreadId                     -- ^Thread ID
   }
 
 -- |Load persistence from file.
@@ -49,10 +50,10 @@ newTVarPers Persistence{..} name def = do
       Success b -> pure b
     Just (Live _) -> error $ "Persistent value already registered: " ++ unpack name
   var <- newTVar initial
-  writeTVar store $ M.insert name (Live (toEncoding <$> readTVar var)) store'
+  writeTVar store $ M.insert name (Live (toJSON <$> readTVar var)) store'
   return var
 
-persLoop :: FilePath -> ThreadId -> STM Bool -> STM (M.Map Text PersItem) -> IO ()
+persLoop :: FilePath -> ThreadId -> STM Bool -> STM (HashMap Text PersItem) -> IO ()
 persLoop file mainThread quit store = forever $ do
   time <- registerDelay 10000000 -- 10 sec
   die <- atomically $ do
