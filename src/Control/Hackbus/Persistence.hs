@@ -1,5 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
-module Control.Hackbus.Persistence where
+module Control.Hackbus.Persistence ( Persistence
+                                   , runPersistence
+                                   , newTVarPers
+                                   ) where
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
@@ -64,6 +67,12 @@ persLoop file mainThread quit store = forever $ do
       (_, True) -> pure False
       _         -> retry
   -- Now it's time to write
-  -- TODO
+  json <- atomically $ store >>= traverse itemToValue
+  encodeFile file json
   -- Stop if it was a signal
   when die $ killThread mainThread
+
+itemToValue :: PersItem -> STM Value
+itemToValue item = case item of
+  File a -> pure a
+  Live a -> a
