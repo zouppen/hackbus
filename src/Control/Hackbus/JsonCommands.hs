@@ -5,12 +5,12 @@ import Control.Applicative
 import Control.Monad (liftM)
 import Data.Aeson
 import qualified Data.Text as T
-import qualified Data.Map.Lazy as M
+import qualified Data.HashMap.Strict as M
 
-data Command = Read [T.Text] | Write (M.Map T.Text Value) deriving (Show)
+data Command = Read [T.Text] | Write (M.HashMap T.Text Value) deriving (Show)
 
 data Answer = Wrote
-            | Return (M.Map T.Text Value)
+            | Return (M.HashMap T.Text Value)
             | Report T.Text Value
             | Failed String
             deriving (Show)

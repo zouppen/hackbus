@@ -6,7 +6,7 @@ import Control.Hackbus.UnixSocket
 import Control.Hackbus.JsonCommands
 import Control.Concurrent.STM
 import Control.Exception
-import qualified Data.Map.Lazy as M
+import qualified Data.HashMap.Strict as M
 
 data Access = Access { reader :: Maybe (STM Value)
                      , writer :: Maybe (Value -> STM ())
@@ -17,11 +17,11 @@ data Access = Access { reader :: Maybe (STM Value)
 -- |Read only wrapper to TVar. Read with `peek`.
 newtype TReadable a = TReadable (TVar (Maybe a))
 
-listenJsonQueries :: M.Map Text Access -> FilePath -> IO ()
+listenJsonQueries :: M.HashMap Text Access -> FilePath -> IO ()
 listenJsonQueries m path = listenUnixSocket (lineHandler $ handleQuery m) path
 
 -- |Process queries coming from the socket. TODO make this more flexible.
-handleQuery :: M.Map Text Access -> LineAction
+handleQuery :: M.HashMap Text Access -> LineAction
 handleQuery m line = do
   ans <- handle exceptionToAnswer $ case eitherDecode line of
     Left e            -> fail e
