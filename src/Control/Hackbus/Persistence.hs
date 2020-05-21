@@ -23,12 +23,12 @@ newPersistence file = do
   return Persistence{..}
 
 -- |Create new TVar which is backed in persistent storage.
-newTPersVar :: (FromJSON a, ToJSON a)
+newTVarPers :: (FromJSON a, ToJSON a)
             => Persistence  -- ^Persistence object
             -> Text         -- ^Key name
             -> a            -- ^Default value if key doesn't exist
             -> STM (TVar a) -- ^New transaction variable
-newTPersVar Persistence{..} name def = do
+newTVarPers Persistence{..} name def = do
   store' <- readTVar store
   -- Finding stored value. Using supplied default if given key doesn't
   -- exist.
