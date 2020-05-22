@@ -12,6 +12,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import System.Posix.Signals
 import Control.Monad
+import System.Directory (doesFileExist)
 
 data PersItem = File Value | Live (STM Value)
 
@@ -25,7 +26,10 @@ data Persistence = Persistence
 runPersistence :: FilePath -> IO Persistence
 runPersistence file = do
   -- Read JSON or die
-  contents <- either error id <$> eitherDecodeFileStrict' file
+  exists <- doesFileExist file
+  contents <- if exists
+    then either error id <$> eitherDecodeFileStrict' file
+    else pure M.empty
   -- Create variable and wrap values into dummy STM actions at first
   store <- newTVarIO $ File <$> contents
   -- Register signal handler
