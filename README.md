@@ -47,10 +47,10 @@ device file entry and in the shell.
 
 Before it works, the cabal package needs to be installed, of course.
 
-Example:
+### Interactive Modbus
 
 ```
-$ cd interactive
+$ cd interactive/modubss
 $ ghci
 GHCi, version 8.4.4: http://www.haskell.org/ghc/  :? for help
 [1 of 1] Compiling Interactive      ( Interactive.hs, interpreted )
