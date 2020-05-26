@@ -6,6 +6,7 @@ import Control.Concurrent.STM
 import Control.Hackbus.AlarmSystem
 import Control.Hackbus.Logging
 import Control.Hackbus.Modules.HfEasy
+import Control.Hackbus.Persistence
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Monad
@@ -64,6 +65,15 @@ main = do
   connect h
   master <- runMaster h
 
+  -- Place where to put stuff
+  runtimeDir <- getXdgDirectory XdgData "hackbus"
+  createDirectoryIfMissing True runtimeDir
+  let persFile = joinPath [runtimeDir, "hacklabjkl.json"]
+  
+  withPersistence 60 persFile $ logic master
+
+logic :: Master -> Persistence -> IO ()
+logic master pers = do
   -- Audio source
   vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus"]
   let vlc = vlcCmd vlcH
