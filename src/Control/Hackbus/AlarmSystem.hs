@@ -12,7 +12,7 @@ data ArmedState = Unarmed   -- ^No alarms should trigger
                 deriving (Eq, Show, Generic)
 
 data AlarmSystem = AlarmSystem
-  { delay    :: Int             -- ^Delay in µs for arrival and leave
+  { delay    :: Int             -- ^Delay in seconds for arrival and leave
   , atHome   :: STM Bool        -- ^State of "at home" switch
   , lockFlag :: TVar Bool       -- ^Flag for unlock event
   , armState :: TVar ArmedState -- ^Resulting state if alarm is on currently
@@ -32,7 +32,7 @@ armed AlarmSystem{..} = atomically $ do
 -- |Known person opened the door. Wait for delay or home switch state
 -- change, whichever comes first.
 uncertain AlarmSystem{..} = do
-  delayVar <- registerDelay delay
+  delayVar <- registerDelay $ 1000000 * delay
   atomically $ do
     isElapsed <- readTVar delayVar
     isAtHome <- atHome
@@ -52,7 +52,7 @@ unarmed AlarmSystem{..} = atomically $ do
 -- |When alarm is going on
 arming AlarmSystem{..} = do
   -- Wait delay before arming.
-  delayVar <- registerDelay delay
+  delayVar <- registerDelay $ 1000000 * delay
   atomically $ do
     isElapsed    <- readTVar delayVar
     suddenUnlock <- readTVar lockFlag

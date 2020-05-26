@@ -160,7 +160,7 @@ logic master pers = do
     paikalla <- atomically swPaikalla
     -- This simple until we can store states
     newTVarIO $ if paikalla then Unarmed else Armed
-  forkIO $ runAlarmSystem $ AlarmSystem 30000000 swPaikalla lockFlagVar armingState
+  forkIO $ runAlarmSystem $ AlarmSystem 30 swPaikalla lockFlagVar armingState
   (_, lastUnarmed) <- forkStateStartTimeRecorder (readTVar armingState) Unarmed
 
   -- Door control stream
