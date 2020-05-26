@@ -30,9 +30,9 @@ noIO = pure $ pure ()
 
 -- |Watch changes in a given STM variable. Watch is triggered every
 -- time when value changes. Notify function is a hybrid action (has
--- both STM and IO actions). NB! Notify functions are not allowed to
--- retry to avoid stupid programming decisions.
-watchWithIO :: Eq a => STM a -> HybridAction -> IO ()
+-- both STM and IO actions). NB! If notify function retries it is not
+-- called again until /source/ changes.
+watchWithIO :: Eq a => STM a -> (a -> a -> HybridAction) -> IO ()
 watchWithIO source notify = do
   oldVar <- atomically $ source >>= newTVar 
   forever $ join $ atomically $ do
@@ -40,12 +40,12 @@ watchWithIO source notify = do
     old <- readTVar oldVar
     when (old == new) retry
     writeTVar oldVar new
-    notify `orElse` error "Your watchWithIO notify function retried."
+    notify old new `orElse` noIO
 
 -- |Watch changes in a given STM variable. When value changes, run
--- given action. For a more generic version, see `watchWith`.
+-- given action. For a more generic version, see `watchWithIO`.
 watch :: Eq v => STM v -> STM () -> IO ()
-watch source notify = watchWithIO source (notify >> noIO)
+watch source notify = watchWithIO source (\_ _ -> notify >> noIO)
 
 -- |JSON report formatter
 jsonReport :: ToJSON a => Text -> a -> B.ByteString
@@ -63,7 +63,7 @@ kv k v q = watch v $ do
 -- printed in addition to givon other values.
 kvv :: (Readable a, Eq b, ToJSON b) => Text -> a b -> [STM Value] -> TQueue B.ByteString -> IO ()
 kvv k v vs q = watch (peek v) $ do
-  v'   <- read' v
+  v'  <- read' v
   vs' <- sequence vs
   writeTQueue q $ jsonReport k (v':vs')
 
