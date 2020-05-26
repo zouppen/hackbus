@@ -40,19 +40,16 @@ delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
       (_, True)     -> return $ return () -- Katkaisin ylhäällä, peruuta
       _             -> retry              -- Muuten odotellaan
 
--- |Track for the time when a certain state change has taken place
-forkStateStartTimeRecorder :: Eq a => STM a -> a -> IO (ThreadId, TReadable EpochTime)
-forkStateStartTimeRecorder source state = do
-  timeVar <- newTVarIO Nothing
-  tid <- forkIO $ watchWithIO source $ do
-    -- No retrying is allowed (nor wise) so making the decision in STM
-    -- monad but doing the action in IO.
-    x <- source
-    pure $ if (x == state)
-      then do time <- epochTime
-              atomically $ writeTVar timeVar $ Just time
-      else pure ()
-  return (tid, TReadable timeVar)
+-- |Track for the time when arming was lifted the last time. Actually
+-- it tracks Armed -> Uncertain state change but that's enough for us
+-- because it is used for tracking the visitors and nothing too
+-- serious.
+runUnarmTimeRecorder :: TVar (Maybe EpochTime) -> STM ArmedState -> IO ()
+runUnarmTimeRecorder timeVar source =
+  watchWithIO source $
+  \old new -> pure $
+  when (old == Armed && new == Uncertain) $
+  epochTime >>= atomically . writeTVar timeVar . Just
 
 main = do
   -- Minimal command line parsing
@@ -124,7 +121,7 @@ logic master pers = do
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
 
   -- Other info
-  inCharge <- newTVarIO (Nothing :: Maybe String)
+  inCharge <- atomically $ newTVarPers pers "inCharge" (Nothing :: Maybe String)
   
   -- Connect variables to given relays
   wire kerhoSahkot  (writeBit master 2 0)
@@ -139,7 +136,7 @@ logic master pers = do
   wire swPajaVasen  (writeBit master 1 2)
 
   -- Maalaushuoneessa on toggle
-  maalausValot <- newTVarIO False
+  maalausValot <- atomically $ newTVarPers pers "maalausValot" False
   toggleButton True swMaalaus maalausValot
   wire (readTVar maalausValot) (writeBit master 1 3)
 
@@ -156,12 +153,10 @@ logic master pers = do
 
   -- Initial state of alarm is the state of "home" switch
   lockFlagVar <- newTVarIO False
-  armingState <- do
-    paikalla <- atomically swPaikalla
-    -- This simple until we can store states
-    newTVarIO $ if paikalla then Unarmed else Armed
+  armingState <- atomically $ newTVarPers pers "armed" Unarmed
+  unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
   forkIO $ runAlarmSystem $ AlarmSystem 30 swPaikalla lockFlagVar armingState
-  (_, lastUnarmed) <- forkStateStartTimeRecorder (readTVar armingState) Unarmed
+  forkIO $ runUnarmTimeRecorder unarmedAt (readTVar armingState)
 
   -- Door control stream
   doorChan <- newTChanIO
@@ -221,7 +216,7 @@ logic master pers = do
                ,kv "ovet-auki" ovetAuki
                ,kv "in_charge" $ readTVar inCharge
                ,kv "keittio" $ peek $ state netwjork
-               ,kvv "arming_state" armingState [read' inCharge, read' lastUnarmed]
+               ,kvv "arming_state" armingState [read' inCharge, read' unarmedAt]
                ]
   forkIO $ runMonitor stdout q
 
