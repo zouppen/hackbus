@@ -35,14 +35,12 @@ noIO = pure $ pure ()
 watchWithIO :: Eq a => STM a -> HybridAction -> IO ()
 watchWithIO source notify = do
   oldVar <- atomically $ source >>= newTVar 
-  forever $ do
-    ioPart <- atomically $ do
-      new <- source
-      old <- readTVar oldVar
-      when (old == new) retry
-      writeTVar oldVar new
-      notify `orElse` error "Your watchWithIO notify function retried."
-    ioPart
+  forever $ join $ atomically $ do
+    new <- source
+    old <- readTVar oldVar
+    when (old == new) retry
+    writeTVar oldVar new
+    notify `orElse` error "Your watchWithIO notify function retried."
 
 -- |Watch changes in a given STM variable. When value changes, run
 -- given action. For a more generic version, see `watchWith`.
