@@ -40,16 +40,24 @@ delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
       (_, True)     -> return $ return () -- Katkaisin ylhäällä, peruuta
       _             -> retry              -- Muuten odotellaan
 
--- |Track for the time when arming was lifted the last time. Actually
--- it tracks Armed -> Uncertain state change but that's enough for us
--- because it is used for tracking the visitors and nothing too
--- serious.
-runUnarmTimeRecorder :: TVar (Maybe EpochTime) -> STM ArmedState -> IO ()
-runUnarmTimeRecorder timeVar source =
-  watchWithIO source $
-  \old new -> pure $
-  when (old == Armed && new == Uncertain) $
-  epochTime >>= atomically . writeTVar timeVar . Just
+-- |Track for the time when arming was lifted the last time. Used for
+-- tracking the visitors and nothing too serious.
+runUnarmTimeRecorder :: TVar (Maybe EpochTime) -> TVar Bool -> STM ArmedState -> IO ()
+runUnarmTimeRecorder timeVar armedVar source = watchWithIO source $ \_ new -> do
+  armed <- readTVar armedVar
+  case (armed, new) of
+    (True, Unarmed) -> do
+      writeTVar armedVar False
+      noIO
+    (False, Armed) -> do
+      writeTVar armedVar True
+      noIO
+    (_, Uncertain) -> pure $ do
+      -- Recording the time of opening in advance to get the exact
+      -- time when doors were opened.
+      now <- epochTime
+      atomically $ writeTVar timeVar $ Just now
+    _ -> noIO
 
 main = do
   -- Minimal command line parsing
@@ -154,9 +162,10 @@ logic master pers = do
   -- Initial state of alarm is the state of "home" switch
   lockFlagVar <- newTVarIO False
   armingState <- atomically $ newTVarPers pers "armed" Unarmed
+  armedVar <- atomically $ newTVarPers pers "armedTmp" False
   unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
   forkIO $ runAlarmSystem $ AlarmSystem 30 swPaikalla lockFlagVar armingState
-  forkIO $ runUnarmTimeRecorder unarmedAt (readTVar armingState)
+  forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState)
 
   -- Door control stream
   doorChan <- newTChanIO
@@ -216,7 +225,8 @@ logic master pers = do
                ,kv "ovet-auki" ovetAuki
                ,kv "in_charge" $ readTVar inCharge
                ,kv "keittio" $ peek $ state netwjork
-               ,kvv "arming_state" armingState [read' inCharge, read' unarmedAt]
+               ,kv "arming_state" $ peek armingState
+               ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ]
   forkIO $ runMonitor stdout q
 
