@@ -23,9 +23,14 @@ data Persistence = Persistence
   { store :: TVar (HashMap Text PersItem) -- ^Contains all persistent values
   }
 
--- |Load persistence from file.
-withPersistence :: FilePath -> (Persistence -> IO ()) -> IO ()
-withPersistence file act = do
+-- |Load persistence from file and store it back periodically and in
+-- state of an Exception.
+withPersistence
+  :: Int                    -- ^How often to save state in normal operation in seconds.
+  -> FilePath               -- ^File to store the state to.
+  -> (Persistence -> IO ()) -- ^IO action to perform with persistent vars
+  -> IO ()
+withPersistence interval file act = do
   -- Read JSON or die
   exists <- doesFileExist file
   contents <- if exists
@@ -43,7 +48,7 @@ withPersistence file act = do
     atomically $ readTVar state >>= \s -> unless (s==Stopped) retry
     putStrLn "State saved"
   -- Main loop doing all the magic
-  void $ forkIO $ persLoop file state (readTVar store)
+  void $ forkIO $ persLoop interval file state (readTVar store)
 
 -- |Create new TVar which is backed in persistent storage.
 newTVarPers :: (FromJSON a, ToJSON a)
@@ -65,9 +70,9 @@ newTVarPers Persistence{..} name def = do
   writeTVar store $ M.insert name (Live (toJSON <$> readTVar var)) store'
   return var
 
-persLoop :: FilePath -> TVar PersState -> STM (HashMap Text PersItem) -> IO ()
-persLoop file stateVar store = loop $ do
-  timeVar <- registerDelay 10000000 -- 10 sec
+persLoop :: Int -> FilePath -> TVar PersState -> STM (HashMap Text PersItem) -> IO ()
+persLoop interval file stateVar store = loop $ do
+  timeVar <- registerDelay $ 1000000 * interval
   ret <- atomically $ do
     state <- readTVar stateVar
     timeout <- readTVar timeVar
