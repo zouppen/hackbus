@@ -3,22 +3,24 @@ module Main where
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Hackbus.AlarmSystem
 import Control.Hackbus.Logging
+import Control.Hackbus.Modules.HfEasy
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
-import Control.Hackbus.AlarmSystem
-import Control.Hackbus.Modules.HfEasy
 import Control.Monad
 import Data.Map.Lazy (fromList)
-import System.Posix.Time (epochTime)
-import System.Posix.Types (EpochTime)
+import Media.Streaming.Vlc
+import System.Directory
 import System.Environment (getArgs)
+import System.FilePath (joinPath)
 import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
-import System.IO
 import System.Process
-import Media.Streaming.Vlc
 import System.Hardware.Modbus.Types (Control)
+import System.IO
+import System.Posix.Time (epochTime)
+import System.Posix.Types (EpochTime)
 
 runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, TReadable Bool)
 runListenUnixSocketActivity triggerDelay path = do
