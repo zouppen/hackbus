@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module Control.Hackbus.Persistence ( Persistence
-                                   , runPersistence
+                                   , withPersistence
                                    , newTVarPers
                                    ) where
 
@@ -9,22 +9,23 @@ import qualified Data.HashMap.Strict as M
 import Data.Text (Text, unpack)
 import Data.Aeson
 import Control.Concurrent
+import Control.Exception
 import Control.Concurrent.STM
-import System.Posix.Signals
 import Control.Monad
 import System.Directory (doesFileExist)
+import Control.Monad.Loops (iterateUntil)
+
+data PersState = Running | Stopping | Stopped  deriving (Show, Eq)
 
 data PersItem = File Value | Live (STM Value)
 
 data Persistence = Persistence
   { store :: TVar (HashMap Text PersItem) -- ^Contains all persistent values
-  , file  :: FilePath                     -- ^File to store data to
-  , tId   :: ThreadId                     -- ^Thread ID
   }
 
 -- |Load persistence from file.
-runPersistence :: FilePath -> IO Persistence
-runPersistence file = do
+withPersistence :: FilePath -> (Persistence -> IO ()) -> IO ()
+withPersistence file act = do
   -- Read JSON or die
   exists <- doesFileExist file
   contents <- if exists
@@ -33,12 +34,16 @@ runPersistence file = do
   -- Create variable and wrap values into dummy STM actions at first
   store <- newTVarIO $ File <$> contents
   -- Register signal handler
-  quit <- newTVarIO False
-  mainThread <- myThreadId
-  installHandler sigTERM (Catch $ atomically $ writeTVar quit True) Nothing
+  state <- newTVarIO Running
+  catch (act Persistence{..}) $ \e -> do
+    pure (e::AsyncException) -- Just to nail the type
+    -- Ask the thread to stop.
+    putStrLn "Saving state..."
+    atomically $ writeTVar state Stopping
+    atomically $ readTVar state >>= \s -> unless (s==Stopped) retry
+    putStrLn "State saved"
   -- Main loop doing all the magic
-  tId <- forkIO $ persLoop file mainThread (readTVar quit) (readTVar store)
-  return Persistence{..}
+  void $ forkIO $ persLoop file state (readTVar store)
 
 -- |Create new TVar which is backed in persistent storage.
 newTVarPers :: (FromJSON a, ToJSON a)
@@ -60,21 +65,21 @@ newTVarPers Persistence{..} name def = do
   writeTVar store $ M.insert name (Live (toJSON <$> readTVar var)) store'
   return var
 
-persLoop :: FilePath -> ThreadId -> STM Bool -> STM (HashMap Text PersItem) -> IO ()
-persLoop file mainThread quit store = forever $ do
-  time <- registerDelay 10000000 -- 10 sec
-  die <- atomically $ do
-    quit' <- quit
-    time' <- readTVar time
-    case (quit', time') of
-      (True, _) -> pure True
-      (_, True) -> pure False
-      _         -> retry
+persLoop :: FilePath -> TVar PersState -> STM (HashMap Text PersItem) -> IO ()
+persLoop file stateVar store = loop $ do
+  timeVar <- registerDelay 10000000 -- 10 sec
+  ret <- atomically $ do
+    state <- readTVar stateVar
+    timeout <- readTVar timeVar
+    when (state == Running && not timeout) retry
+    pure state
   -- Now it's time to write
   json <- atomically $ store >>= traverse itemToValue
   encodeFile file json
-  -- Stop if it was a signal
-  when die $ killThread mainThread
+  pure ret
+  where
+    loop a = finally (void $ iterateUntil (==Stopping) a) sayQuit
+    sayQuit = atomically $ writeTVar stateVar Stopped
 
 itemToValue :: PersItem -> STM Value
 itemToValue item = case item of
