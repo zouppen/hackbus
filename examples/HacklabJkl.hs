@@ -9,14 +9,13 @@ import Control.Hackbus.Modules.HfEasy
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Monad
-import Data.Map.Lazy (fromList)
+import Data.HashMap.Strict (fromList)
 import Media.Streaming.Vlc
 import System.Directory
 import System.Environment (getArgs)
 import System.FilePath (joinPath)
 import System.Hardware.Modbus
 import System.Hardware.Modbus.Abstractions
-import System.Process
 import System.Hardware.Modbus.Types (Control)
 import System.IO
 import System.Posix.Time (epochTime)
