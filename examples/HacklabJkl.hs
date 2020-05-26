@@ -167,6 +167,11 @@ logic master pers = do
   forkIO $ runAlarmSystem $ AlarmSystem 30 swPaikalla lockFlagVar armingState
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState)
 
+  -- Beeper for leave and arrival
+  let beeper = do
+        state <- readTVar armingState
+        pure (state == Uncertain || state == Arming)
+
   -- Door control stream
   doorChan <- newTChanIO
   forkIO $ forever $ do
