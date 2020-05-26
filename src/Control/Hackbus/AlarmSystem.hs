@@ -21,6 +21,8 @@ data AlarmSystem = AlarmSystem
 instance ToJSON ArmedState where
     toEncoding = genericToEncoding defaultOptions
 
+instance FromJSON ArmedState
+
 -- |When alarm is on.
 armed AlarmSystem{..} = atomically $ do
   -- Wait for door unlocking
