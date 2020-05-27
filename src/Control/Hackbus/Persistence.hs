@@ -58,19 +58,11 @@ newTVarPers :: (FromJSON a, ToJSON a)
             -> Text         -- ^Key name
             -> a            -- ^Default value if key doesn't exist
             -> STM (TVar a) -- ^New transaction variable
-newTVarPers (Persistence pers) name def = do
-  pers' <- readTVar pers
-  -- Finding stored value. Using supplied default if given key doesn't
-  -- exist.
-  initial <- case M.lookup name pers' of
-    Nothing       -> pure def
-    Just (File a) -> case fromJSON a of
-      Error msg -> fail $ "Persistent value parse error on " ++ unpack name ++ ": " ++ msg
-      Success b -> pure b
-    _ -> fail $ "Persistent value already registered: " ++ unpack name
+newTVarPers pers name def = do
+  initial <- lookupPers pers name def
   var <- newTVar initial
-  writeTVar pers $ M.insert name (Live (toJSON <$> readTVar var)) pers'
-  return var
+  updatePers pers name $ Live $ toJSON <$> readTVar var
+  pure var
 
 -- |Create a new subtree which is a different namespace from the
 -- parent object (key names between different subtrees may not be
@@ -79,19 +71,27 @@ newTVarPers (Persistence pers) name def = do
 newSubtree :: Persistence     -- ^Persistence object
            -> Text            -- ^Key name
            -> STM Persistence -- ^New subtree
-newSubtree (Persistence pers) name = do
+newSubtree pers name = do
+  initial <- lookupPers pers name M.empty
+  newPers <- Persistence <$> newTVar initial
+  updatePers pers name $ Subtree newPers
+  pure newPers
+
+-- |Lookup a value and supply new default if no value found.
+lookupPers :: FromJSON a => Persistence -> Text -> a -> STM a
+lookupPers (Persistence pers) name def = do
   pers' <- readTVar pers
-  -- Finding stored value. Using supplied default if given key doesn't
-  -- exist.
-  initial <- case M.lookup name pers' of
-    Nothing       -> pure M.empty
+  -- Find stored value. Use supplied default if given key doesn't exist.
+  case M.lookup name pers' of
+    Nothing       -> pure def
     Just (File a) -> case fromJSON a of
       Error msg -> fail $ "Persistent value parse error on " ++ unpack name ++ ": " ++ msg
       Success b -> pure b
     _ -> fail $ "Persistent value already registered: " ++ unpack name
-  subtree <- newTVar initial
-  writeTVar pers $ M.insert name (Subtree (Persistence subtree)) pers'
-  return $ Persistence subtree
+
+-- |Update persistence by writing new PersItem to given key.
+updatePers :: Persistence -> Text -> PersItem -> STM ()
+updatePers (Persistence pers) name new = modifyTVar pers $ M.insert name new
 
 persLoop :: Int -> FilePath -> TVar PersState -> Persistence -> IO ()
 persLoop interval file stateVar pers = loop $ do
