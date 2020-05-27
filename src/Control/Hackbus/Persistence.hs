@@ -17,10 +17,12 @@ import Control.Monad.Loops (iterateUntil)
 
 data PersState = Running | Stopping | Stopped  deriving (Show, Eq)
 
+newtype Map = Map (HashMap Text PersItem)
+
 data PersItem = File Value | Live (STM Value)
 
 data Persistence = Persistence
-  { store :: TVar (HashMap Text PersItem) -- ^Contains all persistent values
+  { store :: TVar Map -- ^Contains all persistent values
   }
 
 -- |Load persistence from file and store it back periodically and in
@@ -38,7 +40,7 @@ withPersistence interval file act = do
     then either error id <$> eitherDecodeFileStrict' file
     else pure M.empty
   -- Create variable and wrap values into dummy STM actions at first
-  store <- newTVarIO $ File <$> contents
+  store <- newTVarIO $ Map $ File <$> contents
   -- Start the background task.
   state <- newTVarIO Running
   forkIO $ persLoop interval file state (readTVar store)
@@ -57,7 +59,7 @@ newTVarPers :: (FromJSON a, ToJSON a)
             -> a            -- ^Default value if key doesn't exist
             -> STM (TVar a) -- ^New transaction variable
 newTVarPers Persistence{..} name def = do
-  store' <- readTVar store
+  Map store' <- readTVar store
   -- Finding stored value. Using supplied default if given key doesn't
   -- exist.
   initial <- case M.lookup name store' of
@@ -67,10 +69,10 @@ newTVarPers Persistence{..} name def = do
       Success b -> pure b
     Just (Live _) -> error $ "Persistent value already registered: " ++ unpack name
   var <- newTVar initial
-  writeTVar store $ M.insert name (Live (toJSON <$> readTVar var)) store'
+  writeTVar store $ Map $ M.insert name (Live (toJSON <$> readTVar var)) store'
   return var
 
-persLoop :: Int -> FilePath -> TVar PersState -> STM (HashMap Text PersItem) -> IO ()
+persLoop :: Int -> FilePath -> TVar PersState -> STM Map -> IO ()
 persLoop interval file stateVar store = loop $ do
   timeVar <- registerDelay $ 1000000 * interval
   ret <- atomically $ do
@@ -79,7 +81,9 @@ persLoop interval file stateVar store = loop $ do
     when (state == Running && not timeout) retry
     pure state
   -- Now it's time to write
-  json <- atomically $ store >>= traverse itemToValue
+  json <- atomically $ do
+    Map store' <- store
+    traverse itemToValue store'
   encodeFile file json
   pure ret
   where
