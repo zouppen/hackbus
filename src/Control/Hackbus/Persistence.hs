@@ -19,7 +19,7 @@ data PersState = Running | Stopping | Stopped  deriving (Show, Eq)
 
 newtype Map = Map (HashMap Text PersItem)
 
-data PersItem = File Value | Live (STM Value)
+data PersItem = File Value | Live (STM Value) | Subtree (TVar Map)
 
 data Persistence = Persistence
   { store :: TVar Map -- ^Contains all persistent values
@@ -76,6 +76,27 @@ newTVarPers Persistence{..} name def = do
   writeTVar store $ Map $ M.insert name (Live (toJSON <$> readTVar var)) store'
   return var
 
+-- |Create a new subtree which is a different namespace from the
+-- parent object (key names between different subtrees may not be
+-- unique but subtree name itself must be unique on same level, of
+-- course.
+newSubtree :: Persistence     -- ^Persistence object
+           -> Text            -- ^Key name
+           -> STM Persistence -- ^New subtree
+newSubtree Persistence{..} name = do
+  Map store' <- readTVar store
+  -- Finding stored value. Using supplied default if given key doesn't
+  -- exist.
+  initial <- case M.lookup name store' of
+    Nothing       -> pure M.empty
+    Just (File a) -> case fromJSON a of
+      Error msg -> fail $ "Persistent value parse error on " ++ unpack name ++ ": " ++ msg
+      Success b -> pure b
+    _ -> fail $ "Persistent value already registered: " ++ unpack name
+  subtree <- newTVar (Map initial)
+  writeTVar store $ Map $ M.insert name (Subtree subtree) store'
+  return $ Persistence subtree
+
 persLoop :: Int -> FilePath -> TVar PersState -> STM Map -> IO ()
 persLoop interval file stateVar store = loop $ do
   timeVar <- registerDelay $ 1000000 * interval
@@ -98,3 +119,6 @@ itemToValue :: PersItem -> STM Value
 itemToValue item = case item of
   File a -> pure a
   Live a -> a
+  Subtree var -> do
+    Map a <- readTVar var
+    toJSON <$> traverse itemToValue a
