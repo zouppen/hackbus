@@ -2,6 +2,7 @@
 module Control.Hackbus.Persistence ( Persistence
                                    , withPersistence
                                    , newTVarPers
+                                   , newSubtree
                                    ) where
 
 import Data.HashMap.Strict (HashMap)
