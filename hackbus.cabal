@@ -4,7 +4,7 @@ synopsis:      Modbus library
 description:   Libmodbus bindings for Haskell.
 category:      Hardware
 license:       LGPL-3
---license-file:  LICENSE
+license-file:  LICENSE
 author:        Joel Lehtonen
 maintainer:    joel.lehtonen@iki.fi
 build-type:    Simple

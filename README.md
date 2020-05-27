@@ -60,3 +60,10 @@ Initialized, ModbusHandle in "h"
 Loaded GHCi configuration from /home/user/hackbus/interactive/.ghci
 *Interactive System.Hardware.Modbus> setSlave h 1 >> writeRegister h 0x40002 2
 ```
+
+## License
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
