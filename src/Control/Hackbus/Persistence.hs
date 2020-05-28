@@ -3,9 +3,9 @@ module Control.Hackbus.Persistence ( Persistence
                                    , withPersistence
                                    , newTVarPers
                                    , newSubtree
+                                   , purgeUnregistered
                                    ) where
 
-import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
 import Data.Text (Text, unpack)
 import Data.Aeson
@@ -18,7 +18,7 @@ import Control.Monad.Loops (iterateUntil)
 
 data PersState = Running | Stopping | Stopped  deriving (Show, Eq)
 
-newtype Persistence = Persistence (TVar (HashMap Text PersItem))
+newtype Persistence = Persistence (TVar (M.HashMap Text PersItem))
 
 data PersItem = File Value | Live (STM Value) | Subtree Persistence
 
@@ -119,3 +119,17 @@ itemToValue item = case item of
     itemMap <- readTVar var
     valueMap <- traverse itemToValue itemMap
     pure $ toJSON valueMap
+
+-- |Purge values from Persistence which have not already registered on
+-- this instance. Might be useful in version update when some
+-- persistent variables are no longer needed.
+purgeUnregistered :: Persistence -> STM ()
+purgeUnregistered (Persistence pers) = do
+  pers' <- readTVar pers
+  traverse recurser pers'
+  writeTVar pers $ M.filter cleaner pers'
+  where
+    cleaner (File _) = False
+    cleaner _        = True
+    recurser (Subtree a) = purgeUnregistered a
+    recurser _           = pure ()
