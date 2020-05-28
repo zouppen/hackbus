@@ -11,7 +11,6 @@ import Data.Text (Text)
 
 import Control.Hackbus.JsonCommands
 import Control.Hackbus.PeekPoke
-import Control.Hackbus.UnixJsonInterface
 
 -- |Watch named STM variables for changes
 addWatches :: Traversable t => a -> t (a -> IO ()) -> IO (t ThreadId)

@@ -48,20 +48,6 @@ handleQuery m line = do
 exceptionToAnswer :: SomeException -> IO Answer
 exceptionToAnswer e = return $ Failed $ show e
 
-read' :: (Readable a, ToJSON b) => a b -> STM Value
-read' var = toJSON <$> peek var
-
-readUnsafe' :: ToJSON a => STM a -> STM Value
-readUnsafe' act = toJSON <$> act
-
-write' :: (Writable a, FromJSON b) => a b -> Value -> STM ()
-write' var = act' $ poke var
-
-act' :: (FromJSON a) => (a -> STM ()) -> Value -> STM ()
-act' f val = case fromJSON val of
-  Success a -> f a
-  Error e   -> fail e
-
 -- |Read only access to variable
 readonly :: (Readable a, ToJSON b) => a b -> Access
 readonly a = Access (Just (read' a)) Nothing

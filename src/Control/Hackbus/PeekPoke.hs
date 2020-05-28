@@ -9,9 +9,14 @@ module Control.Hackbus.PeekPoke
   , poke
   , mkTReadable
   , mkTReadableWith
+  , read'
+  , readUnsafe'
+  , write'
+  , act'
   ) where
 
 import Control.Concurrent.STM
+import Data.Aeson
 
 -- |Read only wrapper to TVar. Read with `peek`.
 newtype TReadable a = TReadable (STM (Maybe a))
@@ -49,3 +54,22 @@ mkTReadable = mkTReadableWith id
 -- |Make TReadable from any TVar with a conversion function.
 mkTReadableWith :: (a -> Maybe b) -> TVar a -> TReadable b
 mkTReadableWith f a = TReadable $ f <$> readTVar a
+
+-- |Peek value as JSON Value
+read' :: (Readable a, ToJSON b) => a b -> STM Value
+read' var = toJSON <$> peek var
+
+-- |Do STM action and return its value
+readUnsafe' :: ToJSON a => STM a -> STM Value
+readUnsafe' act = toJSON <$> act
+
+-- |Deserialize and Write given JSON value to underlying variable.
+write' :: (Writable a, FromJSON b) => a b -> Value -> STM ()
+write' var = act' $ poke var
+
+-- |Deserialize value and run STM action while passing that value to
+-- the action.
+act' :: (FromJSON a) => (a -> STM ()) -> Value -> STM ()
+act' f val = case fromJSON val of
+  Success a -> f a
+  Error e   -> fail e

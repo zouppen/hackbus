@@ -2,10 +2,11 @@
 module Control.Hackbus.JsonCommands (Command(..), Answer(..)) where
 
 import Control.Applicative
+import Control.Hackbus.PeekPoke
 import Control.Monad (liftM)
 import Data.Aeson
-import qualified Data.Text as T
 import qualified Data.HashMap.Strict as M
+import qualified Data.Text as T
 
 data Command = Read [T.Text] | Write (M.HashMap T.Text Value) deriving (Show)
 
