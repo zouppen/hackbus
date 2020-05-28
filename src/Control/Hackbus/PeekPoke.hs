@@ -8,6 +8,7 @@ module Control.Hackbus.PeekPoke
   , peek
   , poke
   , mkTReadable
+  , mkTReadableWith
   ) where
 
 import Control.Concurrent.STM
@@ -43,4 +44,8 @@ peekWithRetry a = peek a >>= maybe retry pure
 
 -- |Create TReadable from TVar.
 mkTReadable :: TVar (Maybe a) -> TReadable a
-mkTReadable a = TReadable $ readTVar a
+mkTReadable = mkTReadableWith id
+
+-- |Make TReadable from any TVar with a conversion function.
+mkTReadableWith :: (a -> Maybe b) -> TVar a -> TReadable b
+mkTReadableWith f a = TReadable $ f <$> readTVar a
