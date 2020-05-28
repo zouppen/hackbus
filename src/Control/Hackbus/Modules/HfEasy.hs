@@ -87,7 +87,7 @@ runHfEasyRelay baseUrl = do
             else pure True -- Rewrite ASAP
     -- Now waiting for control change.
     (if angry then atomically else waitChange 2000000 command) (readTVar commandVar)
-  return $ HfEasy commandVar (TReadable stateVar) tId
+  return $ HfEasy commandVar (mkTReadable stateVar) tId
 
 -- |Error handler which just returns predefined value in case of an
 -- cURL exception.

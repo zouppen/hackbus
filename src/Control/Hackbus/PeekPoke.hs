@@ -3,10 +3,11 @@
 module Control.Hackbus.PeekPoke
   ( Readable
   , Writable
-  , TReadable(..)
+  , TReadable
   , peekWithRetry
   , peek
   , poke
+  , mkTReadable
   ) where
 
 import Control.Concurrent.STM
@@ -39,3 +40,7 @@ instance Writable TMVar where
 -- available). Note this won't empty TMVars, just peeks them.
 peekWithRetry :: Readable a => a b -> STM b
 peekWithRetry a = peek a >>= maybe retry pure
+
+-- |Create TReadable from TVar.
+mkTReadable :: TVar (Maybe a) -> TReadable a
+mkTReadable a = TReadable a

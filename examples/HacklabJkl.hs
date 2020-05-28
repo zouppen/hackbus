@@ -28,7 +28,7 @@ runListenUnixSocketActivity triggerDelay path = do
   var <- newTVarIO Nothing
   let handler = activityDetect triggerDelay (atomically . writeTVar var . Just)
   tid <- forkIO $ connectUnixSocket handler path
-  return (tid, TReadable var)
+  return (tid, mkTReadable var)
 
 delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
   wait <- readTVar <$> registerDelay delay

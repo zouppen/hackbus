@@ -1,5 +1,5 @@
 name:          hackbus
-version:       0.0.15
+version:       0.0.16
 synopsis:      Modbus library
 description:   Libmodbus bindings for Haskell.
 category:      Hardware
