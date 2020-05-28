@@ -4,6 +4,7 @@ import Data.Aeson
 import Data.Text (Text, unpack)
 import Control.Hackbus.UnixSocket
 import Control.Hackbus.JsonCommands
+import Control.Hackbus.PeekPoke
 import Control.Concurrent.STM
 import Control.Exception
 import qualified Data.HashMap.Strict as M
@@ -11,11 +12,6 @@ import qualified Data.HashMap.Strict as M
 data Access = Access { reader :: Maybe (STM Value)
                      , writer :: Maybe (Value -> STM ())
                      }
-
--- TODO move all TVar abstractions to a separate module! Export TReadable as opaque type!
-
--- |Read only wrapper to TVar. Read with `peek`.
-newtype TReadable a = TReadable (TVar (Maybe a))
 
 listenJsonQueries :: M.HashMap Text Access -> FilePath -> IO ()
 listenJsonQueries m path = listenUnixSocket (lineHandler $ handleQuery m) path
@@ -52,27 +48,6 @@ handleQuery m line = do
 exceptionToAnswer :: SomeException -> IO Answer
 exceptionToAnswer e = return $ Failed $ show e
 
-class Readable a where
-  peek :: a b -> STM (Maybe b)
-
-instance Readable TVar where
-  peek v = Just <$> readTVar v
-
-instance Readable TMVar where
-  peek = tryReadTMVar
-
-instance Readable TReadable where
-  peek (TReadable var) = readTVar var
-
-class Writable a where
-  poke :: a b -> b -> STM ()
-
-instance Writable TVar where
-  poke = writeTVar
-
-instance Writable TMVar where
-  poke = putTMVar
-
 read' :: (Readable a, ToJSON b) => a b -> STM Value
 read' var = toJSON <$> peek var
 
@@ -106,8 +81,3 @@ action f = Access Nothing (Just (act' f))
 -- |Run STM action. Unsafe in that sense the action may hide side effects
 readAction :: ToJSON a => STM a -> Access
 readAction f = Access (Just (readUnsafe' f)) Nothing
-
--- |Read Readable type but retry if Nothing (data not yet
--- available). Note this won't empty TMVars, just peeks them.
-peekWithRetry :: Readable a => a b -> STM b
-peekWithRetry a = peek a >>= maybe retry pure

@@ -21,6 +21,7 @@ library
                  , Control.Hackbus.Logging
                  , Control.Hackbus.Modules.HfEasy
                  , Control.Hackbus.Persistence
+                 , Control.Hackbus.PeekPoke
                  , Control.Hackbus.UnixJsonInterface
                  , Control.Hackbus.UnixSocket
                  , Media.Streaming.Vlc

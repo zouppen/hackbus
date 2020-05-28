@@ -10,6 +10,7 @@ import Data.Aeson (Value, ToJSON, toJSON, encode)
 import Data.Text (Text)
 
 import Control.Hackbus.JsonCommands
+import Control.Hackbus.PeekPoke
 import Control.Hackbus.UnixJsonInterface
 
 -- |Watch named STM variables for changes

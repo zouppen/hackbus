@@ -7,6 +7,7 @@ import Control.Hackbus.AlarmSystem
 import Control.Hackbus.Logging
 import Control.Hackbus.Modules.HfEasy
 import Control.Hackbus.Persistence
+import Control.Hackbus.PeekPoke
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Monad

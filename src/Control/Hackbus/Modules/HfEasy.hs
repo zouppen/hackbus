@@ -20,7 +20,7 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Network.Curl.Aeson
 import Network.Curl.Opts
-import Control.Hackbus.UnixJsonInterface
+import Control.Hackbus.PeekPoke
 
 data HfEasy = HfEasy
   { command :: TVar (Maybe Bool) -- ^Control relay. Set to Nothing to let it be in any position.
