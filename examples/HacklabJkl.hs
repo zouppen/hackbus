@@ -165,7 +165,7 @@ logic master pers = do
   armingState <- atomically $ newTVarPers pers "armed" Unarmed
   armedVar <- atomically $ newTVarPers pers "armedTmp" False
   unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
-  forkIO $ runAlarmSystem $ AlarmSystem 30 swPaikalla lockFlagVar armingState
+  forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState)
 
   -- Beeper for leave and arrival
