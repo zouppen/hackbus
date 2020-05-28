@@ -13,7 +13,7 @@ module Control.Hackbus.PeekPoke
 import Control.Concurrent.STM
 
 -- |Read only wrapper to TVar. Read with `peek`.
-newtype TReadable a = TReadable (TVar (Maybe a))
+newtype TReadable a = TReadable (STM (Maybe a))
 
 class Readable a where
   peek :: a b -> STM (Maybe b)
@@ -25,7 +25,7 @@ instance Readable TMVar where
   peek = tryReadTMVar
 
 instance Readable TReadable where
-  peek (TReadable var) = readTVar var
+  peek (TReadable act) = act
 
 class Writable a where
   poke :: a b -> b -> STM ()
@@ -43,4 +43,4 @@ peekWithRetry a = peek a >>= maybe retry pure
 
 -- |Create TReadable from TVar.
 mkTReadable :: TVar (Maybe a) -> TReadable a
-mkTReadable a = TReadable a
+mkTReadable a = TReadable $ readTVar a
