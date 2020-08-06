@@ -91,11 +91,12 @@ logic master pers = do
   vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus"]
   let vlc = vlcCmd vlcH
 
+  -- Prepare data acquisition board
+  daqH <- openFile "/dev/piipperi" WriteMode
+  hSetBuffering daqH NoBuffering
+  
   -- Beeper
-  beep <- do
-    h <- openFile "/dev/piipperi" WriteMode
-    hSetBuffering h NoBuffering
-    pure $ \c -> hPutStr h [c]
+  let beep c = hPutStr daqH [c]
 
   -- Unifi motion
   (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
