@@ -227,6 +227,13 @@ logic master pers = do
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
+  -- Limited "public" UNIX socket API
+  let m = fromList [("open", readAction swAuki)
+                   ,("in_charge", readonly inCharge)
+                   ,("arming_state", readonly armingState)
+                   ]
+  forkIO $ listenJsonQueries m "/tmp/hackbus_public"
+
   -- Start some monitors
   q <- newMonitorQueue
   addWatches q [kv "kerhotila-valot" swKerhoVasen
