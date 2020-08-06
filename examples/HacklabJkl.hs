@@ -92,11 +92,18 @@ logic master pers = do
   let vlc = vlcCmd vlcH
 
   -- Prepare data acquisition board
-  daqH <- openFile "/dev/piipperi" WriteMode
+  daqH <- openFile "/dev/piipperi" ReadWriteMode
   hSetBuffering daqH NoBuffering
   
   -- Beeper
   let beep c = hPutStr daqH [c]
+
+  -- Energy meter
+  energyVar <- atomically $ newTVarPers pers "energy" (0 :: Integer)
+  forkIO $ forever $ do
+    -- One tick means 1 watt hour of energy
+    hGetChar daqH
+    atomically $ modifyTVar' energyVar (+1)
 
   -- Unifi motion
   (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
@@ -225,6 +232,7 @@ logic master pers = do
                    ,("in_charge", readwrite inCharge)
                    ,("ovet_auki", readAction ovetAuki)
                    ,("arming_state", readonly armingState)
+                   ,("energy", readonly energyVar)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
@@ -232,6 +240,7 @@ logic master pers = do
   let m = fromList [("open", readAction swAuki)
                    ,("in_charge", readonly inCharge)
                    ,("arming_state", readonly armingState)
+                   ,("energy", readonly energyVar)
                    ]
   forkIO $ listenJsonQueries m "/tmp/hackbus_public"
 
