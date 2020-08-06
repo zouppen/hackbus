@@ -43,10 +43,10 @@ delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
 
 -- |Track for the time when arming was lifted the last time. Used for
 -- tracking the visitors and nothing too serious.
-runUnarmTimeRecorder :: TVar (Maybe EpochTime) -> TVar Bool -> STM ArmedState -> IO ()
-runUnarmTimeRecorder timeVar armedVar source = watchWithIO source $ \_ new -> do
+runUnarmTimeRecorder :: TVar (Maybe EpochTime) -> TVar Bool -> STM ArmedState -> (Char -> IO ()) -> IO ()
+runUnarmTimeRecorder timeVar armedVar source beep = watchWithIO source $ \_ new -> do
   armed <- readTVar armedVar
-  case (armed, new) of
+  io <- case (armed, new) of
     (True, Unarmed) -> do
       writeTVar armedVar False
       noIO
@@ -59,6 +59,13 @@ runUnarmTimeRecorder timeVar armedVar source = watchWithIO source $ \_ new -> do
       now <- epochTime
       atomically $ writeTVar timeVar $ Just now
     _ -> noIO
+  pure $ do
+    io
+    beep $ case new of
+      Unarmed   -> 't'
+      Armed     -> 'h'
+      Arming    -> 's'
+      Uncertain -> 's'
 
 main = do
   -- Minimal command line parsing
@@ -83,6 +90,12 @@ logic master pers = do
   -- Audio source
   vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus"]
   let vlc = vlcCmd vlcH
+
+  -- Beeper
+  beep <- do
+    h <- openFile "/dev/piipperi" WriteMode
+    hSetBuffering h NoBuffering
+    pure $ \c -> hPutStr h [c]
 
   -- Unifi motion
   (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
@@ -166,7 +179,7 @@ logic master pers = do
   armedVar <- atomically $ newTVarPers pers "armedTmp" False
   unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
-  forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState)
+  forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
 
   -- Beeper for leave and arrival
   let beeper = do
