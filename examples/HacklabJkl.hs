@@ -22,6 +22,7 @@ import System.Hardware.Modbus.Types (Control)
 import System.IO
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
+import System.Process (callCommand)
 
 runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, TReadable Bool)
 runListenUnixSocketActivity triggerDelay path = do
@@ -117,7 +118,7 @@ logic master pers = do
     swAuki,
     swPois,
     loadVideotykki,
-    _,
+    swUutiset,
     _,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
@@ -169,6 +170,9 @@ logic master pers = do
   maalausValot <- atomically $ newTVarPers pers "maalausValot" False
   toggleButton True swMaalaus maalausValot
   wire (readTVar maalausValot) (writeBit master 1 3)
+
+  -- Stop radiouutiset with a micro switch
+  pushButton swUutiset nop $ callCommand "sudo systemctl stop radiouutiset"
 
   -- Pajan hätäseis ja kerhon pistorasioiden sulake
   hataSeis <- fst <$> loadSense swPajaOikea loadPaja 500000
