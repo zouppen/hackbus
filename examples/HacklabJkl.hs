@@ -131,13 +131,12 @@ logic master pers = do
     _,
     loadPaja ] <- fst <$> (pollMany $ readInputBits master 1 0 8)
 
-  -- Viivekatkasiija
-  viiveKerhoSahkot <- atomically $ swKerhoOikea >>= newTVar
-
-  delayOffSwitch swKerhoOikea 4000000
-    (vlc "goto 4")
-    (atomically $ writeTVar viiveKerhoSahkot False >> writeTVar (command netwjork) (Just False))
-    (atomically (writeTVar viiveKerhoSahkot True) >> vlc "goto 5")
+  -- Initial state of alarm is the state of "home" switch
+  lockFlagVar <- newTVarIO False
+  armingState <- atomically $ newTVarPers pers "armed" Unarmed
+  armedVar <- atomically $ newTVarPers pers "armedTmp" False
+  unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
+  forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
 
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
@@ -145,16 +144,20 @@ logic master pers = do
   overrideDoors       <- newTVarIO False
 
   let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
-      kerhoSahkot = (||) <$> readTVar viiveKerhoSahkot <*> readTVar overrideKerhoSahkot
+      isUnarmed   = (== Unarmed) <$> readTVar armingState
+      kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
       pajaValot   = (||) <$> peekWithRetry pajaMotion <*> swPajaOikea
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
 
+  -- Alarm initial state thingies continue
+  forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
+
   -- Other info
   inCharge <- atomically $ newTVarPers pers "inCharge" (Nothing :: Maybe String)
-  
-  -- Connect variables to given relays
+
+  -- Kerhotilan ohjaukset
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
@@ -185,14 +188,6 @@ logic master pers = do
   wire ovetAuki (writeBitRegister master 3 2) -- Kerhon ovi
   wire ovetAuki (writeBitRegister master 3 3) -- Varaston ovi
 
-  -- Initial state of alarm is the state of "home" switch
-  lockFlagVar <- newTVarIO False
-  armingState <- atomically $ newTVarPers pers "armed" Unarmed
-  armedVar <- atomically $ newTVarPers pers "armedTmp" False
-  unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
-  forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
-  forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
-
   -- Beeper for leave and arrival
   let beeper = do
         state <- readTVar armingState
@@ -218,14 +213,13 @@ logic master pers = do
 
   -- Golffataan vähän monadeilla
   let valotJossakin = or <$> sequence [ swKerhoVasen
-                                      , readTVar viiveKerhoSahkot
+                                      , isUnarmed
                                       , swPajaOikea
                                       , readTVar maalausValot
                                       ]
 
   -- UNIX socket API
   let m = fromList [("kerho-valot", readAction swKerhoVasen)
-                   ,("kerho-sahkot", readonly viiveKerhoSahkot)
                    ,("paja-valot", readAction swPajaVasen)
                    ,("paja-sähköt", readAction swPajaOikea)
                    ,("paja-seis", readAction hataSeis)
@@ -252,7 +246,6 @@ logic master pers = do
   q <- newMonitorQueue
   addWatches q [kv "kerhotila-valot" swKerhoVasen
                ,kv "kerhotila-sähköt-katkasin" swKerhoOikea
-               ,kv "kerhotila-sähköt" $ readTVar viiveKerhoSahkot
                ,kv "työpaja-valot" swPajaVasen
                ,kv "työpaja-sähköt" swPajaOikea
                ,kv "kerhotila-kuorma" kerhoKuorma
