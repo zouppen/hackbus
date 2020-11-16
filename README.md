@@ -19,7 +19,7 @@ Then, only curl-aeson and hacbus itself are installed user-wide.
 
 ```
 sudo apt install \
-	cabal \
+	cabal-install \
 	libghc-stm-dev \
 	libghc-text-dev \
 	libghc-aeson-dev \
