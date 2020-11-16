@@ -43,4 +43,4 @@ library
                 stm >= 2 && < 3,
                 text >= 1.2,
                 unix >= 2.7,
-                unordered-containers >= 0.2.10.0
+                unordered-containers >= 0.2.9.0
