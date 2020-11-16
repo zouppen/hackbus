@@ -27,6 +27,7 @@ sudo apt install \
 	libghc-readline-dev \
 	libghc-curl-dev \
 	libghc-utf8-string-dev \
+	libghc-monad-loops-dev \
 	libmodbus-dev
 cabal v1-update
 cabal v1-install
