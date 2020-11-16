@@ -1,5 +1,5 @@
 name:          hackbus
-version:       0.0.16
+version:       0.0.17
 synopsis:      Modbus library
 description:   Libmodbus bindings for Haskell.
 category:      Hardware
@@ -8,7 +8,7 @@ license-file:  LICENSE
 author:        Joel Lehtonen
 maintainer:    joel.lehtonen@iki.fi
 build-type:    Simple
-cabal-version: >= 1.2
+cabal-version: >= 1.8
 source-repository head
   type: git
   location: git://github.com/zouppen/hackbus
@@ -46,21 +46,9 @@ library
                 unordered-containers >= 0.2.9.0
 
 executable taidacent-power-read
-  hs-source-dirs: src
-  main-is:        ../examples/TaidacentPower.hs
-  cc-options:      -std=gnu99
-  pkgconfig-depends: libmodbus
+  hs-source-dirs: examples
+  main-is:        TaidacentPower.hs
   build-depends:
-                aeson >= 1.1,
                 base >= 4 && < 5,
-                bytestring >= 0.10,
-                curl >= 1.3.7,
-                curl-aeson >= 0.0.4,
-                directory >= 1.3,
                 monad-loops >= 0.4.3,
-                network >= 2.6,
-                process >= 1.4.3,
-                stm >= 2 && < 3,
-                text >= 1.2,
-                unix >= 2.7,
-                unordered-containers >= 0.2.9.0
+                hackbus
