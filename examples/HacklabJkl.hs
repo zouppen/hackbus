@@ -89,8 +89,9 @@ main = do
 logic :: Master -> Persistence -> IO ()
 logic master pers = do
   -- Audio source
-  vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus"]
+  vlcH <- vlcStart (Just "/home/joell") ["energiaa.opus","killall.opus","seis.opus","saunominen.flac"]
   let vlc = vlcCmd vlcH
+  vlc "volume 220"
 
   -- Prepare data acquisition board
   daqH <- openFile "/dev/piipperi" ReadWriteMode
@@ -142,6 +143,7 @@ logic master pers = do
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
   overrideDoors       <- newTVarIO False
+  saunaReadyState     <- atomically $ newTVarPers pers "sauna" False
 
   let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
@@ -177,11 +179,14 @@ logic master pers = do
   -- Stop radiouutiset with a micro switch
   pushButton swUutiset nop $ callCommand "sudo systemctl stop radiouutiset"
 
+  -- Sauna valmis -äänitehoste
+  pushButton (readTVar saunaReadyState) nop $ vlc "goto 3"
+
   -- Pajan hätäseis ja kerhon pistorasioiden sulake
   hataSeis <- fst <$> loadSense swPajaOikea loadPaja 500000
   kerhoKuorma <- fst <$> loadSense swKerhoOikea loadKerhoRasia 500000
 
-  pushButton hataSeis nop $ vlc "goto 3"
+  pushButton hataSeis nop $ vlc "goto 4"
 
   -- Door control
   wire ovetAuki (writeBitRegister master 3 1) -- Ulko-ovi
@@ -231,6 +236,7 @@ logic master pers = do
                    ,("ovet_auki", readAction ovetAuki)
                    ,("arming_state", readonly armingState)
                    ,("energy", readonly energyVar)
+                   ,("sauna", readwrite saunaReadyState)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
