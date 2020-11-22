@@ -12,6 +12,7 @@ import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Monad
 import Data.HashMap.Strict (fromList)
+import Data.Scientific (Scientific)
 import Media.Streaming.Vlc
 import System.Directory
 import System.Environment (getArgs)
@@ -236,7 +237,11 @@ logic master pers = do
                    ,("ovet_auki", readAction ovetAuki)
                    ,("arming_state", readonly armingState)
                    ,("energy", readonly energyVar)
-                   ,("sauna", readwrite saunaReadyState)
+                   ,("sauna_temp", action $ \t -> case [(t::Scientific)<40, t>60] of
+                        [True,_] -> writeTVar saunaReadyState False
+                        [_,True] -> writeTVar saunaReadyState True
+                        _        -> pure ()
+                    )
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
@@ -245,6 +250,7 @@ logic master pers = do
                    ,("in_charge", readonly inCharge)
                    ,("arming_state", readonly armingState)
                    ,("energy", readonly energyVar)
+                   ,("sauna", readonly saunaReadyState)
                    ]
   forkIO $ listenJsonQueries m "/tmp/hackbus_public"
 
