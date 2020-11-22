@@ -145,6 +145,7 @@ logic master pers = do
   overrideKerhoValot  <- newTVarIO False
   overrideDoors       <- newTVarIO False
   saunaReadyState     <- atomically $ newTVarPers pers "sauna" False
+  saunaHeatsState     <- atomically $ newTVarPers pers "sauna_heats" False
 
   let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
@@ -237,10 +238,15 @@ logic master pers = do
                    ,("ovet_auki", readAction ovetAuki)
                    ,("arming_state", readonly armingState)
                    ,("energy", readonly energyVar)
-                   ,("sauna_temp", action $ \t -> case [(t::Scientific)<40, t>60] of
-                        [True,_] -> writeTVar saunaReadyState False
-                        [_,True] -> writeTVar saunaReadyState True
-                        _        -> pure ()
+                   ,("sauna_temp", action $ \t -> do
+                        case [(t::Scientific)<40, t>60] of
+                          [True,_] -> writeTVar saunaReadyState False
+                          [_,True] -> writeTVar saunaReadyState True
+                          _        -> pure ()
+                        case [t<30, t>34] of
+                          [True,_] -> writeTVar saunaHeatsState False
+                          [_,True] -> writeTVar saunaHeatsState True
+                          _        -> pure ()
                     )
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
@@ -272,6 +278,7 @@ logic master pers = do
                ,kv "keittio" $ peek $ state netwjork
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
+               ,kv "sauna_heats" $ readTVar saunaHeatsState -- Used by notifier in visitors
                ]
   forkIO $ runMonitor stdout q
 
