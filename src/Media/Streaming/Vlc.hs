@@ -18,7 +18,7 @@ vlcStart cwd files = do
   where
     cp'    = proc "vlc" $ params ++ files
     cp     = cp'{ std_in = CreatePipe, cwd = cwd }
-    params = ["-I","rc","--play-and-stop","--no-playlist-autostart","--"]
+    params = ["-I","rc","--play-and-stop","--no-playlist-autostart","--no-dbus","--"]
 
 -- |Runs given VLC command. See all supported commands by runnning:
 -- `echo help | vlc -I rc`
