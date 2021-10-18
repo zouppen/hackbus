@@ -2,6 +2,7 @@
 -- |Sauna data collection
 module Control.Hackbus.Math.Sauna where
 
+import Control.Applicative
 import Data.Aeson (FromJSON, ToJSON, toJSON, parseJSON)
 import Control.Hackbus.Math.DewPoint
 
@@ -33,23 +34,25 @@ data SaunaConf = SaunaConf
   , dpActive     :: Double -- ^Dew point when it seems someone has started to bath
   } deriving (Show)
 
--- |Evaluate sauna conditions
+-- |Sauna state machine. The thresholds are configurable. It is not
+-- possible to go to Active state from Off state to avoid inadvertent
+-- state change by very humid but cold air.
 evalSauna :: SaunaConf -> Double -> Double -> SaunaState -> SaunaState
-evalSauna SaunaConf{..} temp humi oldState =
-  if temp <= tempCooldown
-  then SaunaOff -- Only route to get back to start state
-  else case oldState of
-    SaunaOff     -> if temp >= tempHeating
-                    then SaunaHeating
-                    else oldState
-    SaunaHeating -> if temp >= tempReady
-                    then SaunaReady
-                    else oldState
-    SaunaReady   -> if dp >= dpActive
-                    then SaunaActive
-                    else oldState
-    _            -> oldState
+evalSauna SaunaConf{..} temp humi oldState = maybe oldState id $
+  SaunaOff `at` (temp <= tempCooldown) <|>
+  case oldState of
+    SaunaOff     -> SaunaHeating `at` (temp >= tempHeating) 
+    SaunaHeating -> SaunaReady `at` (temp >= tempReady) <|>
+                    SaunaActive `at` (dp >= dpActive)
+    SaunaReady   -> SaunaActive `at` (dp >= dpActive)
+    _            -> empty
   where
     -- When getting invalid values from humidity, it's safest to
     -- assume very low dew point (causes no SaunaActive triggering)
     dp = if humi > 100 then -300 else dewPoint temp humi
+
+-- |Returns first argument when second argument is true, otherwise
+-- empty. Useful when wrapping with Maybe or another Alternative type.
+at :: Alternative f => a -> Bool -> f a
+at val True = pure val
+at _ _      = empty
