@@ -10,6 +10,7 @@ import Control.Hackbus.Persistence
 import Control.Hackbus.PeekPoke
 import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
+import Control.Hackbus.Math.Sauna
 import Control.Monad
 import Data.HashMap.Strict (fromList)
 import Data.Scientific (Scientific)
@@ -24,6 +25,10 @@ import System.IO
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
 import System.Process (callCommand)
+
+-- |See Sauna module for more info
+labSauna :: SaunaConf
+labSauna = SaunaConf 30 35 60 18
 
 runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, TReadable Bool)
 runListenUnixSocketActivity triggerDelay path = do
@@ -139,13 +144,12 @@ logic master pers = do
   armedVar <- atomically $ newTVarPers pers "armedTmp" False
   unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
+  saunaState <- atomically $ newTVarPers pers "sauna" SaunaOff
 
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
   overrideDoors       <- newTVarIO False
-  saunaReadyState     <- atomically $ newTVarPers pers "sauna" False
-  saunaHeatsState     <- atomically $ newTVarPers pers "sauna_heats" False
 
   let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
@@ -182,7 +186,7 @@ logic master pers = do
   pushButton swUutiset nop $ callCommand "sudo systemctl stop radiouutiset"
 
   -- Sauna valmis -äänitehoste
-  pushButton (readTVar saunaReadyState) nop $ vlc "goto 3"
+  pushButton ((==SaunaReady) <$> readTVar saunaState) nop $ vlc "goto 3"
 
   -- Pajan hätäseis ja kerhon pistorasioiden sulake
   hataSeis <- fst <$> loadSense swPajaOikea loadPaja 500000
@@ -238,16 +242,7 @@ logic master pers = do
                    ,("ovet_auki", readAction ovetAuki)
                    ,("arming_state", readonly armingState)
                    ,("energy", readonly energyVar)
-                   ,("sauna_temp", action $ \t -> do
-                        case [(t::Scientific)<40, t>60] of
-                          [True,_] -> writeTVar saunaReadyState False
-                          [_,True] -> writeTVar saunaReadyState True
-                          _        -> pure ()
-                        case [t<30, t>34] of
-                          [True,_] -> writeTVar saunaHeatsState False
-                          [_,True] -> writeTVar saunaHeatsState True
-                          _        -> pure ()
-                    )
+                   ,("sauna_temp", action $ \(t,h) -> modifyTVar saunaState $ evalSauna labSauna t h)
                    ]
   forkIO $ listenJsonQueries m "/tmp/automaatio"
 
@@ -256,7 +251,7 @@ logic master pers = do
                    ,("in_charge", readonly inCharge)
                    ,("arming_state", readonly armingState)
                    ,("energy", readonly energyVar)
-                   ,("sauna", readonly saunaReadyState)
+                   ,("sauna", readonly saunaState)
                    ]
   forkIO $ listenJsonQueries m "/tmp/hackbus_public"
 
@@ -278,7 +273,8 @@ logic master pers = do
                ,kv "keittio" $ peek $ state netwjork
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
-               ,kv "sauna_heats" $ readTVar saunaHeatsState -- Used by notifier in visitors
+               ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
+               ,kv "sauna_heats" $ (SaunaHeating==) <$> readTVar saunaState -- Used by notifier in visitors (old version)
                ]
   forkIO $ runMonitor stdout q
 

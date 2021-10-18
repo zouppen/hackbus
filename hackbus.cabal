@@ -1,5 +1,5 @@
 name:          hackbus
-version:       0.0.17
+version:       0.0.18
 synopsis:      Modbus library
 description:   Libmodbus bindings for Haskell.
 category:      Hardware
@@ -24,6 +24,8 @@ library
                  , Control.Hackbus.PeekPoke
                  , Control.Hackbus.UnixJsonInterface
                  , Control.Hackbus.UnixSocket
+                 , Control.Hackbus.Math.DewPoint
+                 , Control.Hackbus.Math.Sauna
                  , Media.Streaming.Vlc
                  , System.Hardware.Modbus.Abstractions
                  , System.Hardware.Modbus.LowLevel
