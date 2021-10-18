@@ -12,7 +12,7 @@ import Control.Hackbus.UnixJsonInterface
 import Control.Hackbus.UnixSocket (connectUnixSocket, activityDetect)
 import Control.Hackbus.Math.Sauna
 import Control.Monad
-import Data.HashMap.Strict (fromList)
+import Data.HashMap.Strict (fromList, union)
 import Data.Scientific (Scientific)
 import Media.Streaming.Vlc
 import System.Directory
@@ -229,31 +229,33 @@ logic master pers = do
                                       , readTVar maalausValot
                                       ]
 
-  -- UNIX socket API
-  let m = fromList [("kerho-valot", readAction swKerhoVasen)
-                   ,("paja-valot", readAction swPajaVasen)
-                   ,("paja-sähköt", readAction swPajaOikea)
-                   ,("paja-seis", readAction hataSeis)
-                   ,("maalaus-valot", readonly maalausValot)
-                   ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
-                   ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
-                   ,("ovet", action $ writeTChan doorChan)
-                   ,("in_charge", readwrite inCharge)
-                   ,("ovet_auki", readAction ovetAuki)
-                   ,("arming_state", readonly armingState)
-                   ,("energy", readonly energyVar)
-                   ,("sauna_temp", action $ \(t,h) -> modifyTVar saunaState $ evalSauna labSauna t h)
-                   ]
-  forkIO $ listenJsonQueries m "/tmp/automaatio"
+  -- UNIX socket API. Define two sets: open to all (public) and
+  -- internal control (private).
 
-  -- Limited "public" UNIX socket API
-  let m = fromList [("open", readAction swAuki)
-                   ,("in_charge", readonly inCharge)
-                   ,("arming_state", readonly armingState)
-                   ,("energy", readonly energyVar)
-                   ,("sauna", readonly saunaState)
-                   ]
-  forkIO $ listenJsonQueries m "/tmp/hackbus_public"
+  let publicApi = fromList
+        [("open", readAction swAuki)
+        ,("in_charge", readonly inCharge)
+        ,("arming_state", readonly armingState)
+        ,("energy", readonly energyVar)
+        ,("sauna", readonly saunaState)
+        ]
+
+  let privateApi = fromList
+        [("kerho-valot", readAction swKerhoVasen)
+        ,("paja-valot", readAction swPajaVasen)
+        ,("paja-sähköt", readAction swPajaOikea)
+        ,("paja-seis", readAction hataSeis)
+        ,("maalaus-valot", readonly maalausValot)
+        ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
+        ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
+        ,("ovet", action $ writeTChan doorChan)
+        ,("in_charge", readwrite inCharge)
+        ,("ovet_auki", readAction ovetAuki)
+        ,("sauna_temp", action $ \(t,h) -> modifyTVar saunaState $ evalSauna labSauna t h)
+        ]
+
+  forkIO $ listenJsonQueries publicApi "/tmp/hackbus_public"
+  forkIO $ listenJsonQueries (privateApi `union` publicApi) "/tmp/automaatio"
 
   -- Start some monitors
   q <- newMonitorQueue
@@ -274,7 +276,6 @@ logic master pers = do
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
-               ,kv "sauna_heats" $ (SaunaHeating==) <$> readTVar saunaState -- Used by notifier in visitors (old version)
                ]
   forkIO $ runMonitor stdout q
 
