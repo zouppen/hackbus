@@ -149,6 +149,7 @@ logic master pers = do
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
+  overridePajaValot  <- newTVarIO False
   overrideDoors       <- newTVarIO False
 
   let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
@@ -156,7 +157,7 @@ logic master pers = do
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
-      pajaValot   = (||) <$> peekWithRetry pajaMotion <*> swPajaOikea
+      pajaValot   = (||) <$> ((||) <$> peekWithRetry pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
 
   -- Alarm initial state thingies continue
@@ -248,6 +249,7 @@ logic master pers = do
         ,("maalaus-valot", readonly maalausValot)
         ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
         ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
+        ,("valokuvaus", readwrite overridePajaValot)
         ,("ovet", action $ writeTChan doorChan)
         ,("in_charge", readwrite inCharge)
         ,("ovet_auki", readAction ovetAuki)
