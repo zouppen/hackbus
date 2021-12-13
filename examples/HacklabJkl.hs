@@ -153,7 +153,7 @@ logic master pers = do
 
   -- Maalaushuoneen ovikytkin avaa ovet määräajaksi
   oviPainikeVar <- newDelayVar
-  pushButton swKerhoOikea nop $ delayRefresh oviPainikeVar 10000000
+  pushButton swKerhoOikea nop $ delayRefresh oviPainikeVar 20000000
 
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
