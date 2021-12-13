@@ -37,16 +37,21 @@ runListenUnixSocketActivity triggerDelay path = do
   tid <- forkIO $ connectUnixSocket handler path
   return (tid, mkTReadable var)
 
-delayOffSwitch var delay waitAct offAct onAct = flip (pushButton var) onAct $ do
-  wait <- readTVar <$> registerDelay delay
-  waitAct
-  join . atomically $ do
-    viive <- wait
-    tila <- var
-    case (viive, tila) of
-      (True, False) -> return offAct      -- Viive kulunut, katkaisin yhä alhaalla
-      (_, True)     -> return $ return () -- Katkaisin ylhäällä, peruuta
-      _             -> retry              -- Muuten odotellaan
+type DelayVar = TVar (STM Bool)
+
+-- Create new delay var, initially True (aka triggered state).
+newDelayVar :: IO DelayVar
+newDelayVar = newTVarIO $ pure True
+
+-- Refresh delay timeout.
+delayRefresh :: DelayVar -> Int -> IO ()
+delayRefresh var delay = do
+  tv <- registerDelay delay
+  atomically $ writeTVar var $ readTVar tv
+
+-- Test variable state. Returns True if delay triggered, False otherwise.
+delayTest :: DelayVar -> STM Bool
+delayTest var = join $ readTVar var
 
 -- |Track for the time when arming was lifted the last time. Used for
 -- tracking the visitors and nothing too serious.
@@ -146,14 +151,20 @@ logic master pers = do
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
   saunaState <- atomically $ newTVarPers pers "sauna" SaunaOff
 
+  -- Maalaushuoneen ovikytkin avaa ovet määräajaksi
+  oviPainikeVar <- newDelayVar
+  pushButton swKerhoOikea nop $ delayRefresh oviPainikeVar 10000000
+
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
   overridePajaValot  <- newTVarIO False
   overrideDoors       <- newTVarIO False
 
-  let ovetAuki    = (||) <$> swAuki <*> readTVar overrideDoors
+  let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
+      oviPainike  = (&&) <$> isUnarmed <*> (not <$> delayTest oviPainikeVar)
+      ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
@@ -197,7 +208,7 @@ logic master pers = do
   -- Door control
   wire ovetAuki (writeBitRegister master 3 1) -- Ulko-ovi
   wire ovetAuki (writeBitRegister master 3 2) -- Kerhon ovi
-  wire swKerhoOikea (writeBitRegister master 3 3) -- Varaston ovi
+  wire oviPainike (writeBitRegister master 3 3) -- Varaston ovi
 
   -- Beeper for leave and arrival
   let beeper = do
@@ -261,7 +272,7 @@ logic master pers = do
   -- Start some monitors
   q <- newMonitorQueue
   addWatches q [kv "kerhotila-valot" swKerhoVasen
-               ,kv "maalaushuone-ovi" swKerhoOikea
+               ,kv "ovipainike" oviPainike
                ,kv "työpaja-valot" swPajaVasen
                ,kv "työpaja-sähköt" swPajaOikea
                ,kv "työpaja-hätäseis" hataSeis
