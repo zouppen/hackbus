@@ -189,16 +189,15 @@ logic master pers = do
   -- Sauna valmis -äänitehoste
   pushButton ((==SaunaReady) <$> readTVar saunaState) nop $ vlc "goto 3"
 
-  -- Pajan hätäseis ja kerhon pistorasioiden sulake
+  -- Pajan hätäseis
   hataSeis <- fst <$> loadSense swPajaOikea loadPaja 500000
-  kerhoKuorma <- fst <$> loadSense swKerhoOikea loadKerhoRasia 500000
 
   pushButton hataSeis nop $ vlc "goto 4"
 
   -- Door control
   wire ovetAuki (writeBitRegister master 3 1) -- Ulko-ovi
   wire ovetAuki (writeBitRegister master 3 2) -- Kerhon ovi
-  wire ovetAuki (writeBitRegister master 3 3) -- Varaston ovi
+  wire swKerhoOikea (writeBitRegister master 3 3) -- Varaston ovi
 
   -- Beeper for leave and arrival
   let beeper = do
@@ -262,10 +261,9 @@ logic master pers = do
   -- Start some monitors
   q <- newMonitorQueue
   addWatches q [kv "kerhotila-valot" swKerhoVasen
-               ,kv "kerhotila-sähköt-katkasin" swKerhoOikea
+               ,kv "maalaushuone-ovi" swKerhoOikea
                ,kv "työpaja-valot" swPajaVasen
                ,kv "työpaja-sähköt" swPajaOikea
-               ,kv "kerhotila-kuorma" kerhoKuorma
                ,kv "työpaja-hätäseis" hataSeis
                ,kv "maalaushuone-valot" $ readTVar maalausValot
                ,kv "tila-poissa" swPois
