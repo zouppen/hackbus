@@ -134,7 +134,7 @@ logic master pers = do
     _,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
-  [ swPajaVasen,
+  [ swPajaVasenNc,
     swPajaOikea,
     swMaalaus,
     _,
@@ -150,6 +150,9 @@ logic master pers = do
   unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
   saunaState <- atomically $ newTVarPers pers "sauna" SaunaOff
+
+  -- Negate some switches
+  let swPajaVasen = not <$> swPajaVasenNc
 
   -- Maalaushuoneen ovikytkin avaa ovet määräajaksi
   oviPainikeVar <- newDelayVar
