@@ -1,5 +1,7 @@
 # HackBus
 
+[![Matrix chat](https://img.shields.io/badge/chat-via%20matrix-brightgreen.svg)](https://matrix.to/#/#jkl:hacklab.fi)
+
 Transactional memory bridge to Modbus RTU. Expandable to other buses
 such as DMX.
 
