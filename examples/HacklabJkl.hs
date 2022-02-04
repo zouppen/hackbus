@@ -150,6 +150,7 @@ logic master pers = do
   unarmedAt <- atomically $ newTVarPers pers "unarmedAt" Nothing
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
   saunaState <- atomically $ newTVarPers pers "sauna" SaunaOff
+  overridePajaSahkot <- atomically $ newTVarPers pers "paja-sahkot-ohitus" False
 
   -- Negate some switches
   let swPajaVasen = not <$> swPajaVasenNc
@@ -173,6 +174,7 @@ logic master pers = do
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
       pajaValot   = (||) <$> ((||) <$> peekWithRetry pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
+      pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
@@ -186,7 +188,7 @@ logic master pers = do
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
 
   -- Pajan sähköt
-  wire swPajaOikea   (writeBit master 1 0)
+  wire pajaSahkot   (writeBit master 1 0)
 
   -- Valot pajaan liikkeellä, varastoon kytkimellä
   wire pajaValot    (writeBit master 1 1)
@@ -204,7 +206,7 @@ logic master pers = do
   pushButton ((==SaunaReady) <$> readTVar saunaState) nop $ vlc "goto 3"
 
   -- Pajan hätäseis
-  hataSeis <- fst <$> loadSense swPajaOikea loadPaja 500000
+  hataSeis <- fst <$> loadSense pajaSahkot loadPaja 500000
 
   pushButton hataSeis nop $ vlc "goto 4"
 
@@ -257,11 +259,12 @@ logic master pers = do
   let privateApi = fromList
         [("kerho-valot", readAction swKerhoVasen)
         ,("paja-valot", readAction swPajaVasen)
-        ,("paja-sähköt", readAction swPajaOikea)
+        ,("paja-sahköt", readAction pajaSahkot)
         ,("paja-seis", readAction hataSeis)
         ,("maalaus-valot", readonly maalausValot)
         ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
         ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
+        ,("paja-sahkot-ohitus", readwrite overridePajaSahkot)
         ,("valokuvaus", readwrite overridePajaValot)
         ,("ovet", action $ writeTChan doorChan)
         ,("in_charge", readwrite inCharge)
@@ -277,7 +280,7 @@ logic master pers = do
   addWatches q [kv "kerhotila-valot" swKerhoVasen
                ,kv "ovipainike" oviPainike
                ,kv "työpaja-valot" swPajaVasen
-               ,kv "työpaja-sähköt" swPajaOikea
+               ,kv "työpaja-sähköt" pajaSahkot
                ,kv "työpaja-hätäseis" hataSeis
                ,kv "maalaushuone-valot" $ readTVar maalausValot
                ,kv "tila-poissa" swPois
