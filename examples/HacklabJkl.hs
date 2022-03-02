@@ -131,7 +131,7 @@ logic master pers = do
     swPois,
     loadVideotykki,
     swUutiset,
-    _,
+    liikeKerho,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
   [ swPajaVasenNc,
@@ -293,6 +293,7 @@ logic master pers = do
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
+               ,kv "liike-kerho" liikeKerho -- Kerho motion sensor test
                ]
   forkIO $ runMonitor stdout q
 
