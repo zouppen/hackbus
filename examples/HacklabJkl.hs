@@ -39,17 +39,21 @@ runListenUnixSocketActivity triggerDelay path = do
 
 type DelayVar = TVar (STM Bool)
 
--- Create new delay var, initially True (aka triggered state).
+-- |Create new delay var, initially True (aka triggered state).
 newDelayVar :: IO DelayVar
 newDelayVar = newTVarIO $ pure True
 
--- Refresh delay timeout.
+-- |Refresh delay timeout.
 delayRefresh :: DelayVar -> Int -> IO ()
 delayRefresh var delay = do
   tv <- registerDelay delay
   atomically $ writeTVar var $ readTVar tv
 
--- Test variable state. Returns True if delay triggered, False otherwise.
+-- |Cancel timer (keep non-triggered state)
+delayOff :: DelayVar -> IO ()
+delayOff var = atomically $ writeTVar var $ pure False
+
+-- |Test variable state. Returns True if delay triggered, False otherwise.
 delayTest :: DelayVar -> STM Bool
 delayTest var = join $ readTVar var
 
@@ -118,9 +122,6 @@ logic master pers = do
     hGetChar daqH
     atomically $ modifyTVar' energyVar (+1)
 
-  -- Unifi motion
-  (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
-
   -- Netwjork SP5 in kitchen
   netwjork <- runHfEasyRelay "http://10.0.6.32/state"
 
@@ -140,7 +141,7 @@ logic master pers = do
     _,
     _,
     _,
-    _,
+    liikePajaRaw,
     loadPaja ] <- fst <$> (pollMany $ readInputBits master 1 0 8)
 
   -- Initial state of alarm is the state of "home" switch
@@ -159,6 +160,12 @@ logic master pers = do
   oviPainikeVar <- newDelayVar
   pushButton swKerhoOikea nop $ delayRefresh oviPainikeVar 20000000
 
+  -- Pajan liiketunnistin
+  let valoViive = 120000000 -- µs
+  pajaMotionEndVar <- newDelayVar
+  pushButton liikePajaRaw (delayRefresh pajaMotionEndVar valoViive) (delayOff pajaMotionEndVar)
+  let pajaMotion = not <$> delayTest pajaMotionEndVar
+
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
@@ -174,7 +181,7 @@ logic master pers = do
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
-      pajaValot   = (||) <$> ((||) <$> peekWithRetry pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
+      pajaValot   = (||) <$> ((||) <$> pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
