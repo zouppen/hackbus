@@ -131,7 +131,7 @@ logic master pers = do
     swPois,
     loadVideotykki,
     swUutiset,
-    liikeKerho,
+    liikeKerhoRaw,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
   [ swPajaVasenNc,
@@ -162,11 +162,13 @@ logic master pers = do
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
-  overridePajaValot  <- newTVarIO False
+  overridePajaValot   <- newTVarIO False
   overrideDoors       <- newTVarIO False
 
   let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
+      isArmed     = (== Armed) <$> readTVar armingState
+      motionOn    = (`elem` [Armed,Arming]) <$> readTVar armingState
       oviPainike  = (&&) <$> isUnarmed <*> (not <$> delayTest oviPainikeVar)
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
@@ -176,6 +178,9 @@ logic master pers = do
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
+  -- Alarm state cleanup
+  let liikeKerho = (&&) <$> isArmed <*> (not <$> liikeKerhoRaw)
+  
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
 
@@ -186,6 +191,7 @@ logic master pers = do
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
+  wire motionOn     (writeBit master 2 3) -- Liikesensorit
 
   -- Pajan sähköt
   wire pajaSahkot   (writeBit master 1 0)
