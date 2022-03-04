@@ -195,8 +195,11 @@ logic master pers = do
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
-  -- Alarm state cleanup
-  let liikeKerho = (&&) <$> isArmed <*> (not <$> liikeKerhoRaw)
+  -- PIR sensors take some time to "warm", so a slight pause is needed.
+  alarmEnabled <- addOffTail 20000000 isArmed
+
+  -- Motion detectors
+  let liikeKerho = (&&) <$> alarmEnabled <*> (not <$> liikeKerhoRaw)
   
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
@@ -316,6 +319,7 @@ logic master pers = do
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
+               ,kv "alarmEnabled" alarmEnabled
                ,kv "liike-kerho" liikeKerho -- Kerho motion sensor test
                ]
   forkIO $ runMonitor stdout q
