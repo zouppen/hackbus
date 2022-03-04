@@ -39,9 +39,9 @@ runListenUnixSocketActivity triggerDelay path = do
 
 type DelayVar = TVar (STM Bool)
 
--- |Create new delay var, initially True (aka triggered state).
-newDelayVar :: IO DelayVar
-newDelayVar = newTVarIO $ pure True
+-- |Create new delay var, with given start state (True: triggered or False: cancelled)
+newDelayVar :: Bool -> STM DelayVar
+newDelayVar = newTVar . pure
 
 -- |Refresh delay timeout.
 delayRefresh :: DelayVar -> Int -> IO ()
@@ -57,16 +57,21 @@ delayOff var = atomically $ writeTVar var $ pure False
 delayTest :: DelayVar -> STM Bool
 delayTest var = join $ readTVar var
 
--- |Lengthen the "on" event duration. Useful for motion detection,
--- delayed lights etc. Doesn't delay off->on event.
-addTail :: Int -> STM Bool -> IO (STM Bool)
-addTail delay stm = do
+-- |Lengthen the "off" state duration. Useful for leave delay for
+-- alarm systems. Doesn't delay on->off state transformation.
+addOffTail :: Int -> STM Bool -> IO (STM Bool)
+addOffTail delay stm = do
   (initState, timer) <- atomically $ do
     a <- stm
-    var <- newTVar $ pure a
+    var <- newDelayVar a
     pure (a, var)
-  pushButtonInit stm (delayRefresh timer delay) (delayOff timer) initState
-  pure $ not <$> delayTest timer
+  pushButtonInit stm (delayOff timer) (delayRefresh timer delay) initState
+  pure $ delayTest timer
+
+-- |Lengthen the "on" state duration. Useful for delayed lights, door
+-- buttons, etc. Doesn't delay off->on state transformation.
+addOnTail :: Int -> STM Bool -> IO (STM Bool)
+addOnTail delay stm = addOffTail delay (not <$> stm) >>= pure . fmap not
 
 -- |Track for the time when arming was lifted the last time. Used for
 -- tracking the visitors and nothing too serious.
@@ -168,8 +173,8 @@ logic master pers = do
   let swPajaVasen = not <$> swPajaVasenNc
 
   -- Viivekytkennät
-  oviPainikeRaw <- addTail 20000000 swKerhoOikea -- Maalaushuoneen ovikytkin
-  pajaMotion    <- addTail 120000000 liikePajaRaw -- Pajan valojen liikekytkin
+  oviPainikeRaw <- addOnTail 20000000 swKerhoOikea -- Maalaushuoneen ovikytkin
+  pajaMotion    <- addOnTail 120000000 liikePajaRaw -- Pajan valojen liikekytkin
   
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
