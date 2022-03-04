@@ -39,19 +39,39 @@ runListenUnixSocketActivity triggerDelay path = do
 
 type DelayVar = TVar (STM Bool)
 
--- Create new delay var, initially True (aka triggered state).
-newDelayVar :: IO DelayVar
-newDelayVar = newTVarIO $ pure True
+-- |Create new delay var, with given start state (True: triggered or False: cancelled)
+newDelayVar :: Bool -> STM DelayVar
+newDelayVar = newTVar . pure
 
--- Refresh delay timeout.
+-- |Refresh delay timeout.
 delayRefresh :: DelayVar -> Int -> IO ()
 delayRefresh var delay = do
   tv <- registerDelay delay
   atomically $ writeTVar var $ readTVar tv
 
--- Test variable state. Returns True if delay triggered, False otherwise.
+-- |Cancel timer (keep non-triggered state)
+delayOff :: DelayVar -> IO ()
+delayOff var = atomically $ writeTVar var $ pure False
+
+-- |Test variable state. Returns True if delay triggered, False otherwise.
 delayTest :: DelayVar -> STM Bool
 delayTest var = join $ readTVar var
+
+-- |Lengthen the "off" state duration. Useful for leave delay for
+-- alarm systems. Doesn't delay on->off state transformation.
+addOffTail :: Int -> STM Bool -> IO (STM Bool)
+addOffTail delay stm = do
+  (initState, timer) <- atomically $ do
+    a <- stm
+    var <- newDelayVar a
+    pure (a, var)
+  pushButtonInit stm (delayOff timer) (delayRefresh timer delay) initState
+  pure $ delayTest timer
+
+-- |Lengthen the "on" state duration. Useful for delayed lights, door
+-- buttons, etc. Doesn't delay off->on state transformation.
+addOnTail :: Int -> STM Bool -> IO (STM Bool)
+addOnTail delay stm = addOffTail delay (not <$> stm) >>= pure . fmap not
 
 -- |Track for the time when arming was lifted the last time. Used for
 -- tracking the visitors and nothing too serious.
@@ -118,9 +138,6 @@ logic master pers = do
     hGetChar daqH
     atomically $ modifyTVar' energyVar (+1)
 
-  -- Unifi motion
-  (_,pajaMotion) <- runListenUnixSocketActivity 120000000 "/run/kvm/unifi/liiketunnistin"
-
   -- Netwjork SP5 in kitchen
   netwjork <- runHfEasyRelay "http://10.0.6.32/state"
 
@@ -131,7 +148,7 @@ logic master pers = do
     swPois,
     loadVideotykki,
     swUutiset,
-    _,
+    liikeKerhoRaw,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
   [ swPajaVasenNc,
@@ -140,7 +157,7 @@ logic master pers = do
     _,
     _,
     _,
-    _,
+    liikePajaRaw,
     loadPaja ] <- fst <$> (pollMany $ readInputBits master 1 0 8)
 
   -- Initial state of alarm is the state of "home" switch
@@ -155,27 +172,35 @@ logic master pers = do
   -- Negate some switches
   let swPajaVasen = not <$> swPajaVasenNc
 
-  -- Maalaushuoneen ovikytkin avaa ovet määräajaksi
-  oviPainikeVar <- newDelayVar
-  pushButton swKerhoOikea nop $ delayRefresh oviPainikeVar 20000000
-
+  -- Viivekytkennät
+  oviPainikeRaw <- addOnTail 20000000 swKerhoOikea -- Maalaushuoneen ovikytkin
+  pajaMotion    <- addOnTail 120000000 liikePajaRaw -- Pajan valojen liikekytkin
+  
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
-  overridePajaValot  <- newTVarIO False
+  overridePajaValot   <- newTVarIO False
   overrideDoors       <- newTVarIO False
 
   let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
-      oviPainike  = (&&) <$> isUnarmed <*> (not <$> delayTest oviPainikeVar)
+      isArmed     = (== Armed) <$> readTVar armingState
+      motionOn    = (`elem` [Armed,Arming]) <$> readTVar armingState
+      oviPainike  = (&&) <$> isUnarmed <*> oviPainikeRaw
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
       tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
-      pajaValot   = (||) <$> ((||) <$> peekWithRetry pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
+      pajaValot   = (||) <$> ((||) <$> pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
+  -- PIR sensors take some time to "warm", so a slight pause is needed.
+  alarmEnabled <- addOffTail 20000000 isArmed
+
+  -- Motion detectors
+  let liikeKerho = (&&) <$> alarmEnabled <*> (not <$> liikeKerhoRaw)
+  
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
 
@@ -186,6 +211,7 @@ logic master pers = do
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
+  wire motionOn     (writeBit master 2 3) -- Liikesensorit
 
   -- Pajan sähköt
   wire pajaSahkot   (writeBit master 1 0)
@@ -293,6 +319,8 @@ logic master pers = do
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
+               ,kv "alarmEnabled" alarmEnabled
+               ,kv "liike-kerho" liikeKerho -- Kerho motion sensor test
                ]
   forkIO $ runMonitor stdout q
 
