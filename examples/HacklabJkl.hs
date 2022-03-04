@@ -57,6 +57,17 @@ delayOff var = atomically $ writeTVar var $ pure False
 delayTest :: DelayVar -> STM Bool
 delayTest var = join $ readTVar var
 
+-- |Lengthen the "on" event duration. Useful for motion detection,
+-- delayed lights etc. Doesn't delay off->on event.
+addTail :: Int -> STM Bool -> IO (STM Bool)
+addTail delay stm = do
+  (initState, timer) <- atomically $ do
+    a <- stm
+    var <- newTVar $ pure a
+    pure (a, var)
+  pushButtonInit stm (delayRefresh timer delay) (delayOff timer) initState
+  pure $ not <$> delayTest timer
+
 -- |Track for the time when arming was lifted the last time. Used for
 -- tracking the visitors and nothing too serious.
 runUnarmTimeRecorder :: TVar (Maybe EpochTime) -> TVar Bool -> STM ArmedState -> (Char -> IO ()) -> IO ()
@@ -156,16 +167,10 @@ logic master pers = do
   -- Negate some switches
   let swPajaVasen = not <$> swPajaVasenNc
 
-  -- Maalaushuoneen ovikytkin avaa ovet määräajaksi
-  oviPainikeVar <- newDelayVar
-  pushButton swKerhoOikea nop $ delayRefresh oviPainikeVar 20000000
-
-  -- Pajan liiketunnistin
-  let valoViive = 120000000 -- µs
-  pajaMotionEndVar <- newDelayVar
-  pushButton liikePajaRaw (delayRefresh pajaMotionEndVar valoViive) (delayOff pajaMotionEndVar)
-  let pajaMotion = not <$> delayTest pajaMotionEndVar
-
+  -- Viivekytkennät
+  oviPainikeRaw <- addTail 20000000 swKerhoOikea -- Maalaushuoneen ovikytkin
+  pajaMotion    <- addTail 120000000 liikePajaRaw -- Pajan valojen liikekytkin
+  
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
   overrideKerhoValot  <- newTVarIO False
@@ -176,7 +181,7 @@ logic master pers = do
       isUnarmed   = (== Unarmed) <$> readTVar armingState
       isArmed     = (== Armed) <$> readTVar armingState
       motionOn    = (`elem` [Armed,Arming]) <$> readTVar armingState
-      oviPainike  = (&&) <$> isUnarmed <*> (not <$> delayTest oviPainikeVar)
+      oviPainike  = (&&) <$> isUnarmed <*> oviPainikeRaw
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
