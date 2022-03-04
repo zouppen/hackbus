@@ -53,11 +53,10 @@ pollMany :: Query [a] -> IO ([STM a], ThreadId)
 pollMany = pollManyWithInterval 100000
 
 -- |Generic button which runs IO action every time a button is
--- pressed.
-pushButton :: STM Bool -> IO () -> IO () -> IO ThreadId
-pushButton source actOff actOn = do
-  state <- atomically source
-  forkIO $ handle state
+-- pressed. Initial state is given to avoid race conditions in case
+-- the actOff and actOn depend on the state.
+pushButtonInit :: STM Bool -> IO () -> IO () -> Bool -> IO ThreadId
+pushButtonInit source actOff actOn = forkIO . handle
   where handle True = do
           atomically $ source >>= check . not
           actOff
@@ -66,6 +65,13 @@ pushButton source actOff actOn = do
           atomically $ source >>= check
           actOn
           handle True
+
+-- |Generic button which runs IO action every time a button is
+-- pressed.
+pushButton :: STM Bool -> IO () -> IO () -> IO ThreadId
+pushButton source actOff actOn = do
+  state <- atomically source
+  pushButtonInit source actOff actOn state
 
 -- |Button which toggles a state when it is pressed once. If the switch is normally open (the usual case), pass True to `no`.
 toggleButton :: Bool -> STM Bool -> TVar Bool -> IO ThreadId
