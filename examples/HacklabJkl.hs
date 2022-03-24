@@ -148,7 +148,7 @@ logic master pers = do
     swPois,
     loadVideotykki,
     swUutiset,
-    liikeKerhoRaw,
+    motionKaytavaRaw,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
   [ swPajaVasenNc,
@@ -157,7 +157,7 @@ logic master pers = do
     _,
     _,
     _,
-    liikePajaRaw,
+    motionPajaRaw,
     loadPaja ] <- fst <$> (pollMany $ readInputBits master 1 0 8)
 
   -- Initial state of alarm is the state of "home" switch
@@ -174,7 +174,7 @@ logic master pers = do
 
   -- Viivekytkennät
   oviPainikeRaw <- addOnTail 20000000 swKerhoOikea -- Maalaushuoneen ovikytkin
-  pajaMotion    <- addOnTail 120000000 liikePajaRaw -- Pajan valojen liikekytkin
+  pajaMotion    <- addOnTail 120000000 motionPajaRaw -- Pajan valojen liikekytkin
   
   -- Remote override
   overrideKerhoSahkot <- newTVarIO False
@@ -196,10 +196,11 @@ logic master pers = do
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
   -- PIR sensors take some time to "warm", so a slight pause is needed.
-  alarmEnabled <- addOffTail 20000000 isArmed
+  alarmEnabled <- addOffTail 30000000 isArmed
 
   -- Motion detectors
-  let liikeKerho = (&&) <$> alarmEnabled <*> (not <$> liikeKerhoRaw)
+  let alarmKerho = (&&) <$> alarmEnabled <*> (not <$> motionKaytavaRaw)
+      alarmPaja  = (&&) <$> alarmEnabled <*> motionPajaRaw
   
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
@@ -320,7 +321,8 @@ logic master pers = do
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
                ,kv "alarmEnabled" alarmEnabled
-               ,kv "liike-kerho" liikeKerho -- Kerho motion sensor test
+               ,kv "alarm-kerho" alarmKerho -- Kerho motion sensor test
+               ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
                ]
   forkIO $ runMonitor stdout q
 
