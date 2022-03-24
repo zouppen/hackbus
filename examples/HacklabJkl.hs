@@ -199,9 +199,9 @@ logic master pers = do
   alarmEnabled <- addOffTail 30000000 isArmed
 
   -- Motion detectors
-  let alarmKerho = (&&) <$> alarmEnabled <*> (not <$> motionKaytavaRaw)
-      alarmPaja  = (&&) <$> alarmEnabled <*> motionPajaRaw
-  
+  let alarmKaytava = (&&) <$> alarmEnabled <*> (not <$> motionKaytavaRaw)
+      alarmPaja    = (&&) <$> alarmEnabled <*> motionPajaRaw
+
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
 
@@ -321,7 +321,7 @@ logic master pers = do
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
                ,kv "alarmEnabled" alarmEnabled
-               ,kv "alarm-kerho" alarmKerho -- Kerho motion sensor test
+               ,kv "alarm-kaytava" alarmKaytava -- Kerho motion sensor test
                ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
                ]
   forkIO $ runMonitor stdout q
