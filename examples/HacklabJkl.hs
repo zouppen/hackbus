@@ -185,7 +185,6 @@ logic master pers = do
   let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
       isArmed     = (== Armed) <$> readTVar armingState
-      motionOn    = (`elem` [Armed,Arming]) <$> readTVar armingState
       oviPainike  = (&&) <$> isUnarmed <*> oviPainikeRaw
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
@@ -199,8 +198,12 @@ logic master pers = do
   alarmEnabled <- addOffTail 30000000 isArmed
 
   -- Motion detectors
-  let alarmKaytava = (&&) <$> alarmEnabled <*> (not <$> motionKaytavaRaw)
-      alarmPaja    = (&&) <$> alarmEnabled <*> motionPajaRaw
+  let alarmify var = do
+        tailed <- addOnTail 8000000 var
+        pure $ (&&) <$> alarmEnabled <*> tailed
+  
+  alarmKaytava <- alarmify (not <$> motionKaytavaRaw)
+  alarmPaja    <- alarmify motionPajaRaw
 
   -- Alarm initial state thingies continue
   forkIO $ runAlarmSystem $ AlarmSystem 60 swPaikalla lockFlagVar armingState
@@ -212,7 +215,7 @@ logic master pers = do
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
-  wire motionOn     (writeBit master 2 3) -- Liikesensorit
+  wire (pure True)  (writeBit master 2 3) -- Liikesensorit aina päällä
 
   -- Pajan sähköt
   wire pajaSahkot   (writeBit master 1 0)
