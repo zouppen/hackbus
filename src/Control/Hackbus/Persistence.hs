@@ -13,6 +13,7 @@ import Control.Concurrent
 import Control.Exception
 import Control.Concurrent.STM
 import Control.Monad
+import Control.Hackbus.Exceptions
 import System.Directory (doesFileExist)
 import Control.Monad.Loops (iterateUntil)
 
@@ -86,9 +87,9 @@ lookupPers (Persistence pers) name def = do
   case M.lookup name pers' of
     Nothing       -> pure def
     Just (File a) -> case fromJSON a of
-      Error msg -> fail $ "Persistent value parse error on " ++ unpack name ++ ": " ++ msg
+      Error msg -> throwSTM $ HackbusFatalException $ "Persistent value parse error on " ++ unpack name ++ ": " ++ msg
       Success b -> pure b
-    _ -> fail $ "Persistent value already registered: " ++ unpack name
+    _ -> throwSTM $ HackbusFatalException $ "Persistent value already registered: " ++ unpack name
 
 -- |Update persistence by writing new PersItem to given key.
 updatePers :: Persistence -> Text -> PersItem -> STM ()

@@ -16,6 +16,8 @@ module Control.Hackbus.PeekPoke
   ) where
 
 import Control.Concurrent.STM
+import Control.Exception (Exception)
+import Control.Hackbus.Exceptions
 import Data.Aeson
 
 -- |Read only wrapper to TVar. Read with `peek`.
@@ -72,4 +74,4 @@ write' var = act' $ poke var
 act' :: (FromJSON a) => (a -> STM ()) -> Value -> STM ()
 act' f val = case fromJSON val of
   Success a -> f a
-  Error e   -> fail e
+  Error e   -> throwSTM $ HackbusFatalException e

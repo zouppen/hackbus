@@ -1,5 +1,5 @@
 name:          hackbus
-version:       0.0.19
+version:       0.0.20
 synopsis:      Modbus library
 description:   Libmodbus bindings for Haskell.
 category:      Hardware
@@ -17,6 +17,7 @@ library
   hs-source-dirs:  src
   exposed-modules: System.Hardware.Modbus
                  , Control.Hackbus.AlarmSystem
+                 , Control.Hackbus.Exceptions
                  , Control.Hackbus.JsonCommands
                  , Control.Hackbus.Logging
                  , Control.Hackbus.Modules.HfEasy

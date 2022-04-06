@@ -2,6 +2,7 @@ module Control.Hackbus.UnixJsonInterface where
 
 import Data.Aeson
 import Data.Text (Text, unpack)
+import Control.Hackbus.Exceptions
 import Control.Hackbus.UnixSocket
 import Control.Hackbus.JsonCommands
 import Control.Hackbus.PeekPoke
@@ -20,7 +21,7 @@ listenJsonQueries m path = listenUnixSocket (lineHandler $ handleQuery m) path
 handleQuery :: M.HashMap Text Access -> LineAction
 handleQuery m line = do
   ans <- handle exceptionToAnswer $ case eitherDecode line of
-    Left e            -> fail e
+    Left e            -> throwIO $ HackbusNonfatalException  e
     Right (Read keys) -> do
       list <- atomically $ mapM readKey keys
       return $ Return $ M.fromList list
@@ -36,11 +37,11 @@ handleQuery m line = do
     writeKey (key, value) = do
       f <- look writer key
       f value
-    look :: (Monad m) => (Access -> Maybe b) -> Text -> m b
+    look :: (Access -> Maybe b) -> Text -> STM b
     look field k = case M.lookup k m of
-      Nothing  -> fail $ "Key not found: " ++ unpack k
+      Nothing  -> throwSTM $ HackbusNonfatalException $ "Key not found: " ++ unpack k
       Just acc -> case field acc of
-        Nothing -> fail $ "Permission denied: " ++ unpack k
+        Nothing -> throwSTM $ HackbusNonfatalException $ "Permission denied: " ++ unpack k
         Just f  -> return f
 
 -- |Catches all exceptions and returns them to the client. NB! May
