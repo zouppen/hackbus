@@ -194,13 +194,10 @@ logic master pers = do
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
 
-  -- PIR sensors take some time to "warm", so a slight pause is needed.
-  alarmEnabled <- addOffTail 30000000 isArmed
-
   -- Motion detectors
-  let alarmify var = do
-        tailed <- addOnTail 8000000 var
-        pure $ (&&) <$> alarmEnabled <*> tailed
+  let alarmify state = do
+        let alarm = (&&) <$> isArmed <*> state
+        addOnTail 8000000 alarm
   
   alarmKaytava <- alarmify (not <$> motionKaytavaRaw)
   alarmPaja    <- alarmify motionPajaRaw
@@ -323,7 +320,6 @@ logic master pers = do
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
-               ,kv "alarmEnabled" alarmEnabled
                ,kv "alarm-kaytava" alarmKaytava -- Kerho motion sensor test
                ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
                ]
