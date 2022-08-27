@@ -17,6 +17,9 @@ data Access = Access { reader :: Maybe (STM Value)
 listenJsonQueries :: M.HashMap Text Access -> FilePath -> IO ()
 listenJsonQueries m path = listenUnixSocket (lineHandler $ handleQuery m) path
 
+connectJsonQueries :: M.HashMap Text Access -> FilePath -> IO ()
+connectJsonQueries m path = connectUnixSocket (lineHandler $ handleQuery m) path
+
 -- |Process queries coming from the socket. TODO make this more flexible.
 handleQuery :: M.HashMap Text Access -> LineAction
 handleQuery m line = do

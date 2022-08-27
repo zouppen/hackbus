@@ -30,13 +30,6 @@ import System.Process (callCommand)
 labSauna :: SaunaConf
 labSauna = SaunaConf 30 35 60 18
 
-runListenUnixSocketActivity :: Int -> String -> IO (ThreadId, TReadable Bool)
-runListenUnixSocketActivity triggerDelay path = do
-  var <- newTVarIO Nothing
-  let handler = activityDetect triggerDelay (atomically . writeTVar var . Just)
-  tid <- forkIO $ connectUnixSocket handler path
-  return (tid, mkTReadable var)
-
 type DelayVar = TVar (STM Bool)
 
 -- |Create new delay var, with given start state (True: triggered or False: cancelled)
@@ -168,6 +161,7 @@ logic master pers = do
   forkIO $ runUnarmTimeRecorder unarmedAt armedVar (readTVar armingState) beep
   saunaState <- atomically $ newTVarPers pers "sauna" SaunaOff
   overridePajaSahkot <- atomically $ newTVarPers pers "paja-sahkot-ohitus" False
+  ringing <- newTVarIO False
 
   -- Negate some switches
   let swPajaVasen = not <$> swPajaVasenNc
@@ -212,7 +206,7 @@ logic master pers = do
   wire kerhoSahkot  (writeBit master 2 0)
   wire kerhoValot   (writeBit master 2 1)
   wire tykkiOhjaus  (writeBit master 2 2) -- Tykin valot
-  wire (pure True)  (writeBit master 2 3) -- Liikesensorit aina päällä
+  wire (readTVar ringing) (writeBit master 2 3) -- Puhelinhälytys
 
   -- Pajan sähköt
   wire pajaSahkot   (writeBit master 1 0)
@@ -299,8 +293,13 @@ logic master pers = do
         ,("sauna_temp", action $ \(t,h) -> modifyTVar saunaState $ evalSauna labSauna t h)
         ]
 
+  let teleApi = fromList
+        [("ring-6906", readwrite ringing)
+        ]
+
   forkIO $ listenJsonQueries publicApi "/tmp/hackbus_public"
   forkIO $ listenJsonQueries (privateApi `union` publicApi) "/tmp/automaatio"
+  forkIO $ connectJsonQueries teleApi "/var/run/kvm/katrihelena/ring"
 
   -- Start some monitors
   q <- newMonitorQueue
@@ -322,6 +321,7 @@ logic master pers = do
                ,kv "sauna" $ readTVar saunaState -- Used by notifier in visitors
                ,kv "alarm-kaytava" alarmKaytava -- Kerho motion sensor test
                ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
+               ,kv "ringing" $ readTVar ringing
                ]
   forkIO $ runMonitor stdout q
 
