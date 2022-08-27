@@ -140,7 +140,7 @@ logic master pers = do
     swAuki,
     swPois,
     loadVideotykki,
-    swUutiset,
+    swVerkko,
     motionKaytavaRaw,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
     
@@ -220,8 +220,8 @@ logic master pers = do
   toggleButton True swMaalaus maalausValot
   wire (readTVar maalausValot) (writeBit master 1 3)
 
-  -- Stop radiouutiset with a micro switch
-  pushButton swUutiset nop $ callCommand "sudo systemctl stop radiouutiset"
+  -- Switch internets with this switch
+  pushButton swVerkko (callCommand "sudo internet jyu") (callCommand "sudo internet telia")
 
   -- Sauna valmis -äänitehoste
   pushButton ((==SaunaReady) <$> readTVar saunaState) nop $ vlc "goto 3"
@@ -322,6 +322,7 @@ logic master pers = do
                ,kv "alarm-kaytava" alarmKaytava -- Kerho motion sensor test
                ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
                ,kv "ringing" $ readTVar ringing
+               ,kv "internet" $ swVerkko
                ]
   forkIO $ runMonitor stdout q
 
