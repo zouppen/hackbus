@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 module Main where
 
 import Control.Concurrent
@@ -25,6 +25,8 @@ import System.IO
 import System.Posix.Time (epochTime)
 import System.Posix.Types (EpochTime)
 import System.Process (callCommand)
+import GHC.Generics
+import Data.Aeson
 
 -- |See Sauna module for more info
 labSauna :: SaunaConf
@@ -91,6 +93,22 @@ runUnarmTimeRecorder timeVar armedVar source beep = watchWithIO source $ \_ new 
       Armed     -> 'h'
       Arming    -> 's'
       Uncertain -> 's'
+
+data VenueInfo = VenueInfo
+  { isOpen   :: Bool         -- ^True if doors are open
+  , inCharge :: Maybe String -- ^Nickname of the person responsible,
+                             -- Nothing if venue is empty.
+  } deriving (Eq, Show, Generic)
+
+instance ToJSON VenueInfo where
+  toEncoding = genericToEncoding defaultOptions
+
+-- |Convert multi-var state of the venue into one single structure.
+toVenueInfo :: ArmedState -> Maybe String -> Bool -> VenueInfo
+toVenueInfo armedState inChargeRaw isOpen = case (armedState, isOpen) of
+  (Armed, _)     -> VenueInfo False Nothing
+  (Uncertain, _) -> VenueInfo False Nothing
+  _ -> VenueInfo isOpen inChargeRaw
 
 main = do
   -- Minimal command line parsing
@@ -314,7 +332,7 @@ logic master pers = do
                ,kv "tila-auki" swAuki
                ,kv "powered" valotJossakin
                ,kv "ovet-auki" ovetAuki
-               ,kv "in_charge" $ readTVar inCharge
+               ,kv "venue" $ toVenueInfo <$> readTVar armingState <*> readTVar inCharge <*> swAuki
                ,kv "keittio" $ peek $ state netwjork
                ,kv "arming_state" $ peek armingState
                ,kvv "visitor_info" armedVar [read' inCharge, read' unarmedAt]
