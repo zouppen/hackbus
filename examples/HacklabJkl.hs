@@ -293,6 +293,7 @@ logic master pers = do
         ,("arming_state", readonly armingState)
         ,("energy", readonly energyVar)
         ,("sauna", readonly saunaState)
+        ,("ping", readAction $ pure True)
         ]
 
   let privateApi = fromList
