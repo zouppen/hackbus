@@ -317,7 +317,7 @@ logic master pers = do
 
   forkIO $ listenJsonQueries publicApi "/tmp/hackbus_public"
   forkIO $ listenJsonQueries (privateApi `union` publicApi) "/tmp/automaatio"
-  forkIO $ connectJsonQueries teleApi "/var/run/kvm/katrihelena/ring"
+  forkIO $ listenJsonQueries teleApi "/home/joell/teleapi"
 
   -- Start some monitors
   q <- newMonitorQueue
