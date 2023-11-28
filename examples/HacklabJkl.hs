@@ -189,10 +189,11 @@ logic master pers = do
   pajaMotion    <- addOnTail 120000000 motionPajaRaw -- Pajan valojen liikekytkin
   
   -- Remote override
-  overrideKerhoSahkot <- newTVarIO False
-  overrideKerhoValot  <- newTVarIO False
-  overridePajaValot   <- newTVarIO False
-  overrideDoors       <- newTVarIO False
+  overrideKerhoSahkot   <- newTVarIO False
+  overrideKerhoValot    <- newTVarIO False
+  overridePajaValot     <- newTVarIO False
+  overrideDoors         <- newTVarIO False
+  overrideKerhoEtuvalot <- newTVarIO False
 
   let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
@@ -201,7 +202,7 @@ logic master pers = do
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
-      tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> loadVideotykki)
+      tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> ((||) <$> loadVideotykki <*> readTVar overrideKerhoEtuvalot))
       pajaValot   = (||) <$> ((||) <$> pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
@@ -304,6 +305,7 @@ logic master pers = do
         ,("maalaus-valot", readonly maalausValot)
         ,("kerho-sahkot-ohitus", readwrite overrideKerhoSahkot)
         ,("kerho-valot-ohitus", readwrite overrideKerhoValot)
+        ,("jaskamode", readwrite overrideKerhoEtuvalot)
         ,("paja-sahkot-ohitus", readwrite overridePajaSahkot)
         ,("valokuvaus", readwrite overridePajaValot)
         ,("ovet", action $ writeTChan doorChan)
