@@ -1,4 +1,4 @@
--- |Quick hack for getting interactive prompt
+-- |Quick hack for getting an interactive prompt
 module Interactive where
 
 import Data.List

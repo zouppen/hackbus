@@ -78,7 +78,8 @@ pushButton source actOff actOn = do
   state <- atomically source
   pushButtonInit source actOff actOn state
 
--- |Button which toggles a state when it is pressed once. If the switch is normally open (the usual case), pass True to `no`.
+-- |Button which toggles a state when it is pressed once.
+-- If the switch is normally open (the usual case), pass True to `no`.
 toggleButton :: Bool -> STM Bool -> TVar Bool -> IO ThreadId
 toggleButton no source var = if no then act nop toggle else act toggle nop
   where act = pushButton source
