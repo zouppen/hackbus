@@ -20,7 +20,7 @@ vlcStart cwd files = do
     cp     = cp'{ std_in = CreatePipe, cwd = cwd }
     params = ["-I","rc","--play-and-stop","--no-playlist-autostart","--no-dbus","--"]
 
--- |Runs given VLC command. See all supported commands by runnning:
+-- |Runs given VLC command. See all supported commands by running:
 -- `echo help | vlc -I rc`
 vlcCmd :: Vlc -> String -> IO ()
 vlcCmd Vlc{..} cmd = do

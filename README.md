@@ -17,7 +17,7 @@ sockets.
 If you have Debian or Ubuntu, I'd recommend installing all available
 dependencies from their repositories to minimize package clutter.
 
-Then, only curl-aeson and hacbus itself are installed user-wide.
+Then, only curl-aeson and hackbus itself are installed user-wide.
 
 ```
 sudo apt install \
@@ -53,7 +53,7 @@ Before it works, the cabal package needs to be installed, of course.
 ### Interactive Modbus
 
 ```
-$ cd interactive/modubss
+$ cd interactive/modbus
 $ ghci
 GHCi, version 8.4.4: http://www.haskell.org/ghc/  :? for help
 [1 of 1] Compiling Interactive      ( Interactive.hs, interpreted )
