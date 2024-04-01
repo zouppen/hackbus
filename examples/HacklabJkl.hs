@@ -185,7 +185,7 @@ logic master pers = do
   let swPajaVasen = not <$> swPajaVasenNc
 
   -- Viivekytkennät
-  oviPainikeRaw <- addOnTail 20000000 swKerhoOikea -- Maalaushuoneen ovikytkin
+  oviPainikeRaw <- addOnTail 30000000 swKerhoOikea -- Maalaushuoneen ovikytkin
   pajaMotion    <- addOnTail 120000000 motionPajaRaw -- Pajan valojen liikekytkin
   
   -- Remote override
