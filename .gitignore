@@ -1,5 +1,6 @@
 # Haskell
 /dist
+/dist-newstyle
 
 # Manual compile outputs
 *.o
