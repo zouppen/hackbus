@@ -28,6 +28,16 @@ import System.Process (callCommand)
 import GHC.Generics
 import Data.Aeson
 
+data OverrideSwitch = AutoOnOff
+                    | ForceOn
+                    | ForceOff
+                    deriving (Eq, Show, Generic)
+
+instance ToJSON OverrideSwitch where
+    toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON OverrideSwitch
+
 -- |See Sauna module for more info
 labSauna :: SaunaConf
 labSauna = SaunaConf 30 35 60 18
@@ -125,7 +135,7 @@ main = do
   runtimeDir <- getXdgDirectory XdgData "hackbus"
   createDirectoryIfMissing True runtimeDir
   let persFile = joinPath [runtimeDir, "hacklabjkl.json"]
-  
+
   withPersistence 60 persFile $ logic master
 
 logic :: Master -> Persistence -> IO ()
@@ -138,7 +148,7 @@ logic master pers = do
   -- Prepare data acquisition board
   daqH <- openFile "/dev/piipperi" ReadWriteMode
   hSetBuffering daqH NoBuffering
-  
+
   -- Beeper
   let beep c = hPutStr daqH [c]
 
@@ -161,7 +171,7 @@ logic master pers = do
     swVerkko,
     motionKaytavaRaw,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
-    
+
   [ swPajaVasenNc,
     swPajaOikea,
     swMaalaus,
@@ -187,13 +197,13 @@ logic master pers = do
   -- Viivekytkennät
   oviPainikeRaw <- addOnTail 30000000 swKerhoOikea -- Maalaushuoneen ovikytkin
   pajaMotion    <- addOnTail 120000000 motionPajaRaw -- Pajan valojen liikekytkin
-  
+
   -- Remote override
   overrideKerhoSahkot   <- newTVarIO False
   overrideKerhoValot    <- newTVarIO False
   overridePajaValot     <- newTVarIO False
   overrideDoors         <- newTVarIO False
-  overrideKerhoEtuvalot <- newTVarIO False
+  overrideKerhoEtuvalot <- atomically $ newTVarPers pers "kerhoEtuvalot" AutoOnOff
 
   let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
@@ -202,7 +212,14 @@ logic master pers = do
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
-      tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> ((||) <$> loadVideotykki <*> readTVar overrideKerhoEtuvalot))
+      tykkiOhjaus = do
+        kv <- kerhoValot
+        lvt <- loadVideotykki
+        okev <- readTVar overrideKerhoEtuvalot
+        pure $ case okev of
+          AutoOnOff -> kv && not lvt
+          ForceOn -> True
+          ForceOff -> False
       pajaValot   = (||) <$> ((||) <$> pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
@@ -211,7 +228,7 @@ logic master pers = do
   let alarmify state = do
         let alarm = (&&) <$> isArmed <*> state
         addOnTail 8000000 alarm
-  
+
   alarmKaytava <- alarmify (not <$> motionKaytavaRaw)
   alarmPaja    <- alarmify motionPajaRaw
 
@@ -344,9 +361,10 @@ logic master pers = do
                ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
                ,kv "ringing" $ readTVar ringing
                ,kv "internet" $ swVerkko
+               ,kv "inCharge" $ readTVar inCharge
                ]
   forkIO $ runMonitor stdout q
 
   putStrLn "Up and running"
-  
+
   atomically $ waitFailure $ getStats master
