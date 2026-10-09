@@ -344,6 +344,7 @@ logic master pers = do
                ,kv "alarm-paja" alarmPaja -- Paja motion sensor test
                ,kv "ringing" $ readTVar ringing
                ,kv "internet" $ swVerkko
+               ,kv "inCharge" $ readTVar inCharge
                ]
   forkIO $ runMonitor stdout q
 
