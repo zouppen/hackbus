@@ -28,6 +28,16 @@ import System.Process (callCommand)
 import GHC.Generics
 import Data.Aeson
 
+data OverrideSwitch = AutoOnOff
+                    | ForceOn
+                    | ForceOff
+                    deriving (Eq, Show, Generic)
+
+instance ToJSON OverrideSwitch where
+    toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON OverrideSwitch
+
 -- |See Sauna module for more info
 labSauna :: SaunaConf
 labSauna = SaunaConf 30 35 60 18
@@ -193,7 +203,7 @@ logic master pers = do
   overrideKerhoValot    <- newTVarIO False
   overridePajaValot     <- newTVarIO False
   overrideDoors         <- newTVarIO False
-  overrideKerhoEtuvalot <- newTVarIO False
+  overrideKerhoEtuvalot <- atomically $ newTVarPers pers "kerhoEtuvalot" AutoOnOff
 
   let ovetAukiA   = (||) <$> swAuki <*> readTVar overrideDoors
       isUnarmed   = (== Unarmed) <$> readTVar armingState
@@ -202,7 +212,14 @@ logic master pers = do
       ovetAuki    = (||) <$> ovetAukiA <*> oviPainike
       kerhoSahkot = (||) <$> isUnarmed <*> readTVar overrideKerhoSahkot
       kerhoValot  = (||) <$> swKerhoVasen <*> readTVar overrideKerhoValot
-      tykkiOhjaus = (&&) <$> kerhoValot <*> (not <$> ((||) <$> loadVideotykki <*> readTVar overrideKerhoEtuvalot))
+      tykkiOhjaus = do
+        kv <- kerhoValot
+        lvt <- loadVideotykki
+        okev <- readTVar overrideKerhoEtuvalot
+        pure $ case okev of
+          AutoOnOff -> kv && not lvt
+          ForceOn -> True
+          ForceOff -> False
       pajaValot   = (||) <$> ((||) <$> pajaMotion <*> swPajaOikea) <*> readTVar overridePajaValot
       swPaikalla  = (||) <$> swAuki <*> (not <$> swPois) -- Paikalla tai ovet auki
       pajaSahkot  = (||) <$> swPajaOikea <*> readTVar overridePajaSahkot
