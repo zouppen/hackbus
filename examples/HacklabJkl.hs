@@ -135,7 +135,7 @@ main = do
   runtimeDir <- getXdgDirectory XdgData "hackbus"
   createDirectoryIfMissing True runtimeDir
   let persFile = joinPath [runtimeDir, "hacklabjkl.json"]
-  
+
   withPersistence 60 persFile $ logic master
 
 logic :: Master -> Persistence -> IO ()
@@ -148,7 +148,7 @@ logic master pers = do
   -- Prepare data acquisition board
   daqH <- openFile "/dev/piipperi" ReadWriteMode
   hSetBuffering daqH NoBuffering
-  
+
   -- Beeper
   let beep c = hPutStr daqH [c]
 
@@ -171,7 +171,7 @@ logic master pers = do
     swVerkko,
     motionKaytavaRaw,
     loadKerhoRasia ] <- fst <$> (pollMany $ readInputBits master 2 0 8)
-    
+
   [ swPajaVasenNc,
     swPajaOikea,
     swMaalaus,
@@ -197,7 +197,7 @@ logic master pers = do
   -- Viivekytkennät
   oviPainikeRaw <- addOnTail 30000000 swKerhoOikea -- Maalaushuoneen ovikytkin
   pajaMotion    <- addOnTail 120000000 motionPajaRaw -- Pajan valojen liikekytkin
-  
+
   -- Remote override
   overrideKerhoSahkot   <- newTVarIO False
   overrideKerhoValot    <- newTVarIO False
@@ -228,7 +228,7 @@ logic master pers = do
   let alarmify state = do
         let alarm = (&&) <$> isArmed <*> state
         addOnTail 8000000 alarm
-  
+
   alarmKaytava <- alarmify (not <$> motionKaytavaRaw)
   alarmPaja    <- alarmify motionPajaRaw
 
@@ -366,5 +366,5 @@ logic master pers = do
   forkIO $ runMonitor stdout q
 
   putStrLn "Up and running"
-  
+
   atomically $ waitFailure $ getStats master
